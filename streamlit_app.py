@@ -430,14 +430,14 @@ def get_llama_response(user_message: str, model_database: pd.DataFrame, criteria
     try:
         context = build_context(model_database, criteria_database)
         
-        # Build conversation history for Llama
         messages = [{"role": "system", "content": context}]
         
-        # Add recent conversation history (last 6 messages for context)
-        for msg in st.session_state.messages[-6:]:
-            messages.append({"role": msg['role'], "content": msg['content']})
+        # Only include conversation history if NOT in model_input state
+        # This prevents Llama from "remembering" model IDs mentioned earlier
+        if st.session_state.current_state != "model_input":
+            for msg in st.session_state.messages[-6:]:
+                messages.append({"role": msg['role'], "content": msg['content']})
         
-        # Add current message
         messages.append({"role": "user", "content": user_message})
         
         completion = st.session_state.groq_client.chat.completions.create(
