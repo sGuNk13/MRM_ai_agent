@@ -304,10 +304,12 @@ def process_model_assessment(model_id: str, current_performance: float,
     )
 
 def extract_model_id(message: str, model_database: pd.DataFrame) -> Optional[str]:
-    """Extract model ID from message"""
+    """Extract model ID from message - strict matching only"""
+    
+    # Only look for specific patterns like MODEL_001, model_id_1234, etc.
     patterns = [
         r'MODEL[_\s-]?\d+',
-        r'model[_\s-]?\d+',
+        r'model_id[_\s-]?\d+',
         r'\bM\d+\b',
     ]
     
@@ -315,14 +317,12 @@ def extract_model_id(message: str, model_database: pd.DataFrame) -> Optional[str
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             candidate = match.group(0).upper().replace(' ', '_')
+            # Verify it actually exists in database
             if find_model_info(candidate, model_database):
                 return candidate
     
-    words = message.upper().split()
-    for word in words:
-        clean_word = word.strip('.,!?()[]{}')
-        if find_model_info(clean_word, model_database):
-            return clean_word
+    # DON'T do fuzzy word matching - it causes false positives
+    # The old code that checked every word is removed
     
     return None
 
@@ -475,44 +475,32 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
         if wants_assessment:
-            # Only try to extract model ID if the message is long enough to contain one
-            if len(user_message) > 20:
-                model_id = extract_model_id(user_message, model_database)
+            # Try to find ANY word that matches an actual model ID in the database
+            found_model = None
+            words = user_message.split()
+            
+            for word in words:
+                clean_word = word.strip('.,!?()[]{}"\' ')
+                # Check if this exact word exists as a model_id in database
+                if not model_database[model_database['model_id'] == clean_word].empty:
+                    found_model = clean_word
+                    break
+            
+            if found_model:
+                # User mentioned a valid model ID - skip to performance input
+                model_info = find_model_info(found_model, model_database)
+                st.session_state.model_id = found_model
+                st.session_state.current_state = "performance_input"
+                st.session_state.assessment_result = None
+                st.session_state.logged_to_gsheet = False
                 
-                if model_id:
-                    model_info = find_model_info(model_id, model_database)
-                    st.session_state.model_id = model_id
-                    st.session_state.current_state = "performance_input"
-                    st.session_state.assessment_result = None
-                    st.session_state.logged_to_gsheet = False
-                    
-                    context_msg = f"User wants to assess model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
-                    return get_llama_response(context_msg, model_database, criteria_database)
-            
-            # User wants to assess but didn't specify which model
-            st.session_state.current_state = "model_input"
-            
-            # CRITICAL: Clear any model-related context from recent messages
-            # This prevents Llama from "remembering" model IDs from earlier conversation
-            clean_messages = []
-            for msg in st.session_state.messages[-3:]:  # Only keep last 3 messages
-                # Remove any model_id mentions from content
-                content = msg['content']
-                for _, row in model_database.iterrows():
-                    content = content.replace(row['model_id'], '[MODEL_ID]')
-                clean_messages.append({'role': msg['role'], 'content': content})
-            
-            # Temporarily override messages for this response only
-            original_messages = st.session_state.messages.copy()
-            st.session_state.messages = clean_messages
-            
-            context_msg = "User wants to assess a model but has NOT provided a model ID. Ask: 'Which model ID would you like to assess?' Do NOT mention ANY specific model IDs or examples."
-            response = get_llama_response(context_msg, model_database, criteria_database)
-            
-            # Restore original messages
-            st.session_state.messages = original_messages
-            
-            return response
+                context_msg = f"User wants to assess model {found_model}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+                return get_llama_response(context_msg, model_database, criteria_database)
+            else:
+                # No valid model ID found - ask for it
+                st.session_state.current_state = "model_input"
+                context_msg = "User wants to assess a model but didn't specify which one. Ask them which model ID they want to assess."
+                return get_llama_response(context_msg, model_database, criteria_database)
         else:
             return get_llama_response(user_message, model_database, criteria_database)
     
