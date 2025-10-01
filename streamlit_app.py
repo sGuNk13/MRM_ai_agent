@@ -379,6 +379,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             model_info = find_model_info(model_id, model_database)
             st.session_state.model_id = model_id
             st.session_state.current_state = "performance_input"
+            st.session_state.assessment_result = None  # Clear old assessment
+            st.session_state.logged_to_gsheet = False  # Clear log status
             
             context_msg = f"User mentioned model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
             return get_llama_response(context_msg, model_database, criteria_database)
@@ -442,6 +444,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         if any(word in user_message.lower() for word in ['assess', 'another', 'new model', 'next']):
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
+            st.session_state.assessment_result = None  # Clear old assessment
+            st.session_state.logged_to_gsheet = False  # Clear log status
             return get_llama_response("User wants to assess another model. Acknowledge and ask which model they'd like to assess next.", model_database, criteria_database)
         else:
             return get_llama_response(user_message, model_database, criteria_database)
@@ -588,6 +592,24 @@ def main():
     # Header
     st.title("AI Model Assessment Agent")
     st.caption("Powered by Llama 3.1 via Groq")
+
+    # Custom CSS to flip chat positions
+    st.markdown("""
+        <style>
+        /* Move user messages to right */
+        .stChatMessage[data-testid="user-message"] {
+            flex-direction: row-reverse;
+        }
+        .stChatMessage[data-testid="user-message"] .stMarkdown {
+            text-align: right;
+        }
+        
+        /* Move assistant messages to left (default, but explicit) */
+        .stChatMessage[data-testid="assistant-message"] {
+            flex-direction: row;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
     # Load databases
     try:
