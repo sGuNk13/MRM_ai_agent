@@ -343,26 +343,32 @@ def extract_number(message: str) -> Optional[float]:
 def build_context(model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
     """Build rich context for Llama"""
     
-    models_list = "\n".join([f"- {row['model_id']} (Metric: {row['metric']}, Baseline: {row['baseline_performance']})" 
-                         for _, row in model_database.iterrows()])
+    state = st.session_state.current_state
+    model_id = st.session_state.model_id
+    
+    # Only include model list when actually needed
+    if state in ["model_input", "greeting"]:
+        models_context = f"""
+There are {len(model_database)} models available in the database.
+DO NOT mention specific model IDs unless the user explicitly asks for examples or a list.
+"""
+    else:
+        models_list = "\n".join([f"- {row['model_id']} (Metric: {row['metric']}, Baseline: {row['baseline_performance']})" 
+                                 for _, row in model_database.iterrows()])
+        models_context = f"""
+AVAILABLE MODELS:
+{models_list}
+"""
     
     criteria_list = "\n".join([f"- {row['metric']}: Low ≤{row['low_threshold']}%, Medium ≤{row['medium_threshold']}%, High ≤{row['high_threshold']}%" 
                                for _, row in criteria_database.iterrows()])
     
-    state = st.session_state.current_state
-    model_id = st.session_state.model_id
-    
     context = f"""You are a helpful AI assistant for model performance assessment.
 
 CURRENT STATE: {state}
+{f"SELECTED MODEL: {model_id}" if model_id else ""}
 
-AVAILABLE MODELS (total: {len(model_database)}):
-{models_list}
-
-CRITICAL INSTRUCTIONS:
-- Only use models from this exact list. Do not invent or suggest models that are not listed above.
-- When asking user which model to assess, do NOT mention specific model IDs unless they ask for examples.
-- When user says "assess a model" without specifying which one, simply ask "Which model ID would you like to assess?" without listing models.
+{models_context}
 
 RISK CRITERIA:
 {criteria_list}
@@ -371,19 +377,13 @@ CONVERSATION FLOW:
 1. greeting -> User wants to assess a model or ask questions
 2. model_input -> Waiting for user to provide a model ID
 3. performance_input -> Model {model_id if model_id else '[pending]'} selected, waiting for current performance value
-4. assessment_complete -> Assessment done, user can request report or assess another model
+4. assessment_complete -> Assessment done
 
 YOUR ROLE:
 - Have natural, helpful conversations
 - Guide users through the assessment process
-- Answer questions about models, metrics, and risk ratings
-- Be conversational but professional
-- When user provides model ID or performance value, acknowledge it clearly
-
-IMPORTANT:
-- Keep responses concise (2-3 sentences unless explaining something complex)
-- Don't repeat the entire state/context back to the user
-- Be helpful and friendly without being overly verbose"""
+- When in model_input state and user hasn't provided a model ID yet, simply ask "Which model ID would you like to assess?" - DO NOT mention any specific model IDs
+- Be conversational and concise (2-3 sentences)"""
     
     return context
 
@@ -491,7 +491,7 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             
             # User wants to assess but didn't specify which model
             st.session_state.current_state = "model_input"
-            context_msg = "User wants to assess a model but didn't specify which one. Ask them which model ID they want to assess. Do NOT suggest or mention any specific model IDs - just ask them to provide one."
+            context_msg = "CRITICAL: User wants to assess a model but has NOT specified which one yet. You MUST ask them to provide a model ID. Do NOT mention or suggest any specific model IDs like model_id_1234. Just ask: 'Which model ID would you like to assess?'"
             return get_llama_response(context_msg, model_database, criteria_database)
         else:
             return get_llama_response(user_message, model_database, criteria_database)
