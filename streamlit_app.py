@@ -491,8 +491,28 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             
             # User wants to assess but didn't specify which model
             st.session_state.current_state = "model_input"
-            context_msg = "CRITICAL: User wants to assess a model but has NOT specified which one yet. You MUST ask them to provide a model ID. Do NOT mention or suggest any specific model IDs like model_id_1234. Just ask: 'Which model ID would you like to assess?'"
-            return get_llama_response(context_msg, model_database, criteria_database)
+            
+            # CRITICAL: Clear any model-related context from recent messages
+            # This prevents Llama from "remembering" model IDs from earlier conversation
+            clean_messages = []
+            for msg in st.session_state.messages[-3:]:  # Only keep last 3 messages
+                # Remove any model_id mentions from content
+                content = msg['content']
+                for _, row in model_database.iterrows():
+                    content = content.replace(row['model_id'], '[MODEL_ID]')
+                clean_messages.append({'role': msg['role'], 'content': content})
+            
+            # Temporarily override messages for this response only
+            original_messages = st.session_state.messages.copy()
+            st.session_state.messages = clean_messages
+            
+            context_msg = "User wants to assess a model but has NOT provided a model ID. Ask: 'Which model ID would you like to assess?' Do NOT mention ANY specific model IDs or examples."
+            response = get_llama_response(context_msg, model_database, criteria_database)
+            
+            # Restore original messages
+            st.session_state.messages = original_messages
+            
+            return response
         else:
             return get_llama_response(user_message, model_database, criteria_database)
     
