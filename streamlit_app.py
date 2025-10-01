@@ -359,7 +359,10 @@ CURRENT STATE: {state}
 AVAILABLE MODELS (total: {len(model_database)}):
 {models_list}
 
-CRITICAL: Only use models from this exact list. Do not invent or suggest models that are not listed above.
+CRITICAL INSTRUCTIONS:
+- Only use models from this exact list. Do not invent or suggest models that are not listed above.
+- When asking user which model to assess, do NOT mention specific model IDs unless they ask for examples.
+- When user says "assess a model" without specifying which one, simply ask "Which model ID would you like to assess?" without listing models.
 
 RISK CRITERIA:
 {criteria_list}
@@ -468,29 +471,29 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
     
     # State: greeting - open conversation
     if state == "greeting":
-        # Check if user explicitly wants to start an assessment
         user_lower = user_message.lower()
         wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
         if wants_assessment:
-            model_id = extract_model_id(user_message, model_database)
-            
-            if model_id:
-                model_info = find_model_info(model_id, model_database)
-                st.session_state.model_id = model_id
-                st.session_state.current_state = "performance_input"
-                st.session_state.assessment_result = None
-                st.session_state.logged_to_gsheet = False
+            # Only try to extract model ID if the message is long enough to contain one
+            if len(user_message) > 20:
+                model_id = extract_model_id(user_message, model_database)
                 
-                context_msg = f"User wants to assess model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
-                return get_llama_response(context_msg, model_database, criteria_database)
-            else:
-                # User wants to assess but didn't specify which model
-                st.session_state.current_state = "model_input"
-                context_msg = "User wants to assess a model but didn't specify which one. Ask them to provide the model ID they want to assess."
-                return get_llama_response(context_msg, model_database, criteria_database)
+                if model_id:
+                    model_info = find_model_info(model_id, model_database)
+                    st.session_state.model_id = model_id
+                    st.session_state.current_state = "performance_input"
+                    st.session_state.assessment_result = None
+                    st.session_state.logged_to_gsheet = False
+                    
+                    context_msg = f"User wants to assess model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+                    return get_llama_response(context_msg, model_database, criteria_database)
+            
+            # User wants to assess but didn't specify which model
+            st.session_state.current_state = "model_input"
+            context_msg = "User wants to assess a model but didn't specify which one. Ask them which model ID they want to assess. Do NOT suggest or mention any specific model IDs - just ask them to provide one."
+            return get_llama_response(context_msg, model_database, criteria_database)
         else:
-            # General conversation
             return get_llama_response(user_message, model_database, criteria_database)
     
     # State: model_input - waiting for model ID
