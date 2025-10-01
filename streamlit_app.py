@@ -6,9 +6,10 @@ Complete AI-powered chatbot with:
 - Natural language understanding via Llama
 - Fuzzy model matching
 - Risk assessment with detailed reports
+- Google Sheets logging
 
 Author: Financial Engineering Team
-Version: 1.0 (Streamlit Native)
+Version: 1.1 (with Google Sheets Integration)
 """
 
 import streamlit as st
@@ -19,6 +20,8 @@ from dataclasses import dataclass, field
 import re
 from groq import Groq
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -140,6 +143,47 @@ def initialize_session_state():
             st.session_state.groq_client = Groq(api_key=st.secrets['GROQ_API_KEY'])
         else:
             st.session_state.groq_client = None
+    
+    if 'gsheet_client' not in st.session_state:
+        st.session_state.gsheet_client = None
+        if 'gcp_service_account' in st.secrets and 'GOOGLE_SHEET_ID' in st.secrets:
+            try:
+                scope = ['https://spreadsheets.google.com/feeds',
+                        'https://www.googleapis.com/auth/drive']
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                    st.secrets["gcp_service_account"], scope)
+                st.session_state.gsheet_client = gspread.authorize(creds)
+            except Exception as e:
+                st.session_state.gsheet_error = str(e)
+
+# ============================================================================
+# GOOGLE SHEETS LOGGING
+# ============================================================================
+
+def log_assessment_to_gsheet(assessment_dict: Dict) -> bool:
+    """Log assessment to Google Sheets"""
+    if st.session_state.gsheet_client is None:
+        return False
+    
+    try:
+        sheet = st.session_state.gsheet_client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
+        worksheet = sheet.sheet1
+        
+        row_data = [
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            assessment_dict['model_id'],
+            assessment_dict['metric'],
+            assessment_dict['baseline'],
+            assessment_dict['current'],
+            f"{assessment_dict['deviation']:.2f}%",
+            assessment_dict['risk_rating']
+        ]
+        
+        worksheet.append_row(row_data)
+        return True
+    except Exception as e:
+        st.error(f"Failed to log to Google Sheets: {str(e)}")
+        return False
 
 # ============================================================================
 # AI AGENT CORE FUNCTIONS
@@ -388,6 +432,11 @@ def generate_ai_response(user_message: str, model_database: pd.DataFrame, criter
             )
             st.session_state.assessment_result = assessment.to_dict()
             st.session_state.current_state = "assessment_complete"
+            
+            # Log to Google Sheets
+            if log_assessment_to_gsheet(st.session_state.assessment_result):
+                st.session_state.logged_to_gsheet = True
+            
             return "Assessment complete! See results below.\n\nWould you like to:\n• Assess another model?\n• Get a detailed report?\n• Start over?"
         except Exception as e:
             return f"Error: {str(e)}"
@@ -559,8 +608,8 @@ def main():
         st.code(str(e))
         st.info(f"""
 Please ensure these files are in the same directory as streamlit_app.py:
-• {MODEL_DATABASE_FILE}
-• {CRITERIA_DATABASE_FILE}
+- {MODEL_DATABASE_FILE}
+- {CRITERIA_DATABASE_FILE}
 
 Upload them to your GitHub repository and redeploy.
         """)
@@ -576,6 +625,11 @@ Upload them to your GitHub repository and redeploy.
         
         st.success(f"Loaded {len(model_database)} models")
         st.success(f"Loaded {len(criteria_database)} criteria")
+        
+        if st.session_state.gsheet_client:
+            st.success("Google Sheets connected")
+        else:
+            st.warning("Google Sheets not configured")
         
         st.divider()
         
@@ -617,6 +671,12 @@ Upload them to your GitHub repository and redeploy.
     if (st.session_state.assessment_result and 
         st.session_state.current_state == "assessment_complete"):
         display_assessment_card(st.session_state.assessment_result)
+        
+        # Show Google Sheets log status
+        if st.session_state.get('logged_to_gsheet'):
+            st.success("Assessment logged to Google Sheets")
+        elif st.session_state.gsheet_client is None:
+            st.info("Google Sheets not configured - assessment not logged")
         
         if st.button("Generate Detailed Report"):
             report = generate_detailed_report(st.session_state.assessment_result)
