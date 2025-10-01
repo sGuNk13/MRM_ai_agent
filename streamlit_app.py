@@ -136,6 +136,12 @@ def initialize_session_state():
             except Exception as e:
                 st.session_state.gsheet_error = str(e)
 
+    if 'degradation_reason' not in st.session_state:
+        st.session_state.degradation_reason = None
+    
+    if 'mitigation_plan' not in st.session_state:
+        st.session_state.mitigation_plan = None
+
 # ============================================================================
 # GOOGLE SHEETS LOGGING
 # ============================================================================
@@ -171,6 +177,43 @@ def log_assessment_to_gsheet(assessment_dict: Dict) -> bool:
             assessment_dict['current'],
             f"{assessment_dict['deviation']:.2f}%",
             assessment_dict['risk_rating']
+        ]
+        
+        worksheet.append_row(row_data)
+        return True
+    except Exception as e:
+        st.error(f"Failed to log to Google Sheets: {str(e)}")
+        return False
+
+def log_assessment_to_gsheet_with_details(assessment_dict: Dict, reason: str, mitigation: str) -> bool:
+    """Log assessment with degradation reason and mitigation plan"""
+    if st.session_state.gsheet_client is None:
+        return False
+    
+    try:
+        sheet = st.session_state.gsheet_client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
+        
+        current_month = datetime.now().strftime('%B')
+        
+        try:
+            worksheet = sheet.worksheet(current_month)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=12)
+            headers = ['timestamp', 'model_id', 'metric', 'baseline', 
+                      'current_performance', 'deviation', 'risk_rating',
+                      'degradation_reason', 'mitigation_plan']
+            worksheet.append_row(headers)
+        
+        row_data = [
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            assessment_dict['model_id'],
+            assessment_dict['metric'],
+            assessment_dict['baseline'],
+            assessment_dict['current'],
+            f"{assessment_dict['deviation']:.2f}%",
+            assessment_dict['risk_rating'],
+            reason if reason else 'N/A',
+            mitigation if mitigation else 'N/A'
         ]
         
         worksheet.append_row(row_data)
@@ -382,6 +425,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         st.session_state.current_state = "greeting"
         st.session_state.model_id = None
         st.session_state.assessment_result = None
+        st.session_state.degradation_reason = None
+        st.session_state.mitigation_plan = None
         return get_llama_response("User wants to reset/start over. Acknowledge the reset and ask what they'd like to do.", model_database, criteria_database)
     
     state = st.session_state.current_state
@@ -442,17 +487,79 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 criteria_database
             )
             st.session_state.assessment_result = assessment.to_dict()
-            st.session_state.current_state = "assessment_complete"
             
-            # Log to Google Sheets
-            if log_assessment_to_gsheet(st.session_state.assessment_result):
-                st.session_state.logged_to_gsheet = True
+            # Check if High or Critical - require additional info
+            risk_rating = st.session_state.assessment_result['risk_rating']
             
-            result = st.session_state.assessment_result
-            context_msg = f"Assessment complete! Model {result['model_id']} - Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is ready (they'll see the detailed card below). Ask if they want a detailed report or to assess another model."
-            return get_llama_response(context_msg, model_database, criteria_database)
+            if risk_rating in ['High', 'Critical']:
+                st.session_state.current_state = "reason_required"
+                context_msg = f"Assessment shows {risk_rating} risk with {assessment.deviation_percentage:.2f}% degradation. This is serious. Ask user to explain the REASON for this performance degradation. Emphasize that vague answers like 'I don't know' or 'no idea' are not acceptable - they must provide specific analysis."
+                return get_llama_response(context_msg, model_database, criteria_database)
+            else:
+                # Low/Medium risk - complete normally
+                st.session_state.current_state = "assessment_complete"
+                
+                # Log to Google Sheets
+                if log_assessment_to_gsheet(st.session_state.assessment_result):
+                    st.session_state.logged_to_gsheet = True
+                
+                result = st.session_state.assessment_result
+                context_msg = f"Assessment complete! Model {result['model_id']} - Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is ready. Ask if they want to assess another model."
+                return get_llama_response(context_msg, model_database, criteria_database)
         except Exception as e:
             return f"Error during assessment: {str(e)}"
+
+    # State: reason_required - waiting for degradation reason (High/Critical only)
+    elif state == "reason_required":
+        # Validate the response isn't generic/uninformative
+        uninformative_phrases = [
+            'no idea', 'don\'t know', 'don\'t care', 'not sure', 
+            'dunno', 'idk', 'whatever', 'none', 'n/a', 'na'
+        ]
+        
+        user_lower = user_message.lower().strip()
+        
+        # Check if response is too short or uninformative
+        if len(user_message.strip()) < 20 or any(phrase in user_lower for phrase in uninformative_phrases):
+            context_msg = f"User provided uninformative response: '{user_message}'. This is a {st.session_state.assessment_result['risk_rating']} risk situation. Firmly explain that vague answers are not acceptable for high-risk situations. Ask them to provide a specific, detailed explanation of what caused the performance degradation (e.g., data quality issues, feature drift, model bugs, infrastructure problems, etc.)."
+            return get_llama_response(context_msg, model_database, criteria_database)
+        
+        # Response is acceptable
+        st.session_state.degradation_reason = user_message
+        st.session_state.current_state = "mitigation_required"
+        
+        context_msg = f"User provided reason: '{user_message}'. Good. Now ask for their MITIGATION PLAN - specific actions they will take to address this {st.session_state.assessment_result['risk_rating']} risk. Again, vague answers are not acceptable."
+        return get_llama_response(context_msg, model_database, criteria_database)
+    
+    # State: mitigation_required - waiting for mitigation plan (High/Critical only)
+    elif state == "mitigation_required":
+        # Validate the response isn't generic/uninformative
+        uninformative_phrases = [
+            'no idea', 'don\'t know', 'don\'t care', 'not sure', 
+            'dunno', 'idk', 'whatever', 'none', 'n/a', 'na', 
+            'will check', 'look into it', 'investigate'
+        ]
+        
+        user_lower = user_message.lower().strip()
+        
+        # Check if response is too short or uninformative
+        if len(user_message.strip()) < 30 or any(phrase in user_lower for phrase in uninformative_phrases):
+            context_msg = f"User provided uninformative mitigation plan: '{user_message}'. This is unacceptable for {st.session_state.assessment_result['risk_rating']} risk. Firmly explain they must provide a specific, actionable mitigation plan with concrete steps (e.g., 'retrain model with cleaned data', 'rollback to v2.1', 'add monitoring alerts', 'review feature engineering pipeline', etc.)."
+            return get_llama_response(context_msg, model_database, criteria_database)
+        
+        # Response is acceptable - save and complete
+        st.session_state.mitigation_plan = user_message
+        st.session_state.current_state = "assessment_complete"
+        
+        # Log to Google Sheets with reason and mitigation
+        if log_assessment_to_gsheet_with_details(st.session_state.assessment_result, 
+                                                   st.session_state.degradation_reason,
+                                                   st.session_state.mitigation_plan):
+            st.session_state.logged_to_gsheet = True
+        
+        result = st.session_state.assessment_result
+        context_msg = f"Excellent. Assessment complete with required documentation. Model {result['model_id']} - Risk: {result['risk_rating']}. Reason and mitigation plan have been recorded. Tell user everything is logged and ask if they want to assess another model."
+        return get_llama_response(context_msg, model_database, criteria_database)
     
     # State: assessment_complete - assessment done
     elif state == "assessment_complete":
@@ -462,6 +569,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             st.session_state.model_id = None
             st.session_state.assessment_result = None  # Clear old assessment
             st.session_state.logged_to_gsheet = False  # Clear log status
+            st.session_state.degradation_reason = None
+            st.session_state.mitigation_plan = None
             return get_llama_response("User wants to assess another model. Acknowledge and ask which model they'd like to assess next.", model_database, criteria_database)
         else:
             return get_llama_response(user_message, model_database, criteria_database)
@@ -671,6 +780,8 @@ Upload them to your GitHub repository and redeploy.
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
             st.session_state.assessment_result = None
+            st.session_state.degradation_reason = None
+            st.session_state.mitigation_plan = None
             st.rerun()
         
         if st.button("Show Databases", use_container_width=True):
