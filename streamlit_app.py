@@ -687,15 +687,15 @@ Upload them to your GitHub repository and redeploy.
         elif st.session_state.gsheet_client is None:
             st.info("Google Sheets not configured - assessment not logged")
         
-        if st.button("Generate Detailed Report"):
-            report = generate_detailed_report(st.session_state.assessment_result)
-            st.markdown(report)
-            st.download_button(
-                "Download Report",
-                report,
-                file_name=f"report_{st.session_state.assessment_result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/markdown"
-            )
+        # Automatically show detailed report
+        report = generate_detailed_report(st.session_state.assessment_result)
+        st.markdown(report)
+        st.download_button(
+            "Download Report",
+            report,
+            file_name=f"report_{st.session_state.assessment_result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+            mime="text/markdown"
+        )
     
     # Chat input
     if prompt := st.chat_input("Type your message..."):
