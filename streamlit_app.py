@@ -287,7 +287,7 @@ def build_context(model_database: pd.DataFrame, criteria_database: pd.DataFrame)
     """Build rich context for Llama"""
     
     models_list = "\n".join([f"- {row['model_id']} (Metric: {row['metric']}, Baseline: {row['baseline_performance']})" 
-                             for _, row in model_database.head(10).iterrows()])
+                         for _, row in model_database.iterrows()])
     
     criteria_list = "\n".join([f"- {row['metric']}: Low ≤{row['low_threshold']}%, Medium ≤{row['medium_threshold']}%, High ≤{row['high_threshold']}%" 
                                for _, row in criteria_database.iterrows()])
@@ -299,8 +299,10 @@ def build_context(model_database: pd.DataFrame, criteria_database: pd.DataFrame)
 
 CURRENT STATE: {state}
 
-AVAILABLE MODELS (first 10):
+AVAILABLE MODELS (total: {len(model_database)}):
 {models_list}
+
+CRITICAL: Only use models from this exact list. Do not invent or suggest models that are not listed above.
 
 RISK CRITERIA:
 {criteria_list}
