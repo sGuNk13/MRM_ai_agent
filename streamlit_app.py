@@ -667,9 +667,9 @@ Upload them to your GitHub repository and redeploy.
     
     for idx, msg in enumerate(st.session_state.messages):
         if msg['role'] == 'user':
-            st_message(msg['content'], is_user=True, key=f"user_{idx}", avatar_style="adventurer")
+            st_message(msg['content'], is_user=True, key=f"user_{idx}", avatar_style="adventurer", seed=123)
         else:
-            st_message(msg['content'], is_user=False, key=f"bot_{idx}", avatar_style="bottts-neutral")
+            st_message(msg['content'], is_user=False, key=f"bot_{idx}", avatar_style="bottts-neutral", seed=42)
     
     # Display assessment if available and in right state
     if (st.session_state.assessment_result and 
