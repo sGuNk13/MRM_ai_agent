@@ -384,6 +384,41 @@ IMPORTANT:
     
     return context
 
+def refine_text_with_llama(text: str, field_type: str) -> str:
+    """Use Llama to refine user's answer into formal professional English"""
+    if st.session_state.groq_client is None:
+        return text  # Return original if Llama unavailable
+    
+    try:
+        if field_type == "reason":
+            prompt = f"""Refine the following explanation of model performance degradation into clear, formal, professional English suitable for technical documentation. Keep the core meaning but improve clarity, grammar, and professionalism. Keep it concise (2-3 sentences max).
+
+Original: {text}
+
+Refined version:"""
+        else:  # mitigation
+            prompt = f"""Refine the following mitigation plan into clear, formal, professional English suitable for technical documentation. Structure it as concrete, actionable steps. Keep the core actions but improve clarity, grammar, and professionalism.
+
+Original: {text}
+
+Refined version:"""
+        
+        completion = st.session_state.groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "You are a technical writing assistant. Refine text into professional, formal English while preserving the original meaning."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,  # Lower temperature for more consistent refinement
+            max_tokens=300
+        )
+        
+        refined = completion.choices[0].message.content.strip()
+        return refined if refined else text  # Fallback to original if refinement fails
+        
+    except Exception as e:
+        return text  # Return original if error occurs
+
 def get_llama_response(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
     """Get natural response from Llama"""
     if st.session_state.groq_client is None:
@@ -433,19 +468,29 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
     
     # State: greeting - open conversation
     if state == "greeting":
-        # Check if user mentions wanting to assess a model
-        model_id = extract_model_id(user_message, model_database)
+        # Check if user explicitly wants to start an assessment
+        user_lower = user_message.lower()
+        wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
-        if model_id:
-            model_info = find_model_info(model_id, model_database)
-            st.session_state.model_id = model_id
-            st.session_state.current_state = "performance_input"
-            st.session_state.assessment_result = None  # Clear old assessment
-            st.session_state.logged_to_gsheet = False  # Clear log status
+        if wants_assessment:
+            model_id = extract_model_id(user_message, model_database)
             
-            context_msg = f"User mentioned model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
-            return get_llama_response(context_msg, model_database, criteria_database)
+            if model_id:
+                model_info = find_model_info(model_id, model_database)
+                st.session_state.model_id = model_id
+                st.session_state.current_state = "performance_input"
+                st.session_state.assessment_result = None
+                st.session_state.logged_to_gsheet = False
+                
+                context_msg = f"User wants to assess model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+                return get_llama_response(context_msg, model_database, criteria_database)
+            else:
+                # User wants to assess but didn't specify which model
+                st.session_state.current_state = "model_input"
+                context_msg = "User wants to assess a model but didn't specify which one. Ask them to provide the model ID they want to assess."
+                return get_llama_response(context_msg, model_database, criteria_database)
         else:
+            # General conversation
             return get_llama_response(user_message, model_database, criteria_database)
     
     # State: model_input - waiting for model ID
@@ -511,7 +556,6 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
 
     # State: reason_required - waiting for degradation reason (High/Critical only)
     elif state == "reason_required":
-        # Validate the response isn't generic/uninformative
         uninformative_phrases = [
             'no idea', 'don\'t know', 'don\'t care', 'not sure', 
             'dunno', 'idk', 'whatever', 'none', 'n/a', 'na'
@@ -519,21 +563,20 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         
         user_lower = user_message.lower().strip()
         
-        # Check if response is too short or uninformative
         if len(user_message.strip()) < 20 or any(phrase in user_lower for phrase in uninformative_phrases):
-            context_msg = f"User provided uninformative response: '{user_message}'. This is a {st.session_state.assessment_result['risk_rating']} risk situation. Firmly explain that vague answers are not acceptable for high-risk situations. Ask them to provide a specific, detailed explanation of what caused the performance degradation (e.g., data quality issues, feature drift, model bugs, infrastructure problems, etc.)."
+            context_msg = f"User provided uninformative response: '{user_message}'. This is a {st.session_state.assessment_result['risk_rating']} risk situation. Firmly explain that vague answers are not acceptable for high-risk situations. Ask them to provide a specific, detailed explanation of what caused the performance degradation."
             return get_llama_response(context_msg, model_database, criteria_database)
         
-        # Response is acceptable
-        st.session_state.degradation_reason = user_message
+        # Refine the user's answer
+        refined_reason = refine_text_with_llama(user_message, "reason")
+        st.session_state.degradation_reason = refined_reason
         st.session_state.current_state = "mitigation_required"
         
-        context_msg = f"User provided reason: '{user_message}'. Good. Now ask for their MITIGATION PLAN - specific actions they will take to address this {st.session_state.assessment_result['risk_rating']} risk. Again, vague answers are not acceptable."
+        context_msg = f"User provided reason. You refined it to: '{refined_reason}'. Acknowledge you've documented their explanation and now ask for their MITIGATION PLAN - specific actions they will take to address this {st.session_state.assessment_result['risk_rating']} risk."
         return get_llama_response(context_msg, model_database, criteria_database)
     
     # State: mitigation_required - waiting for mitigation plan (High/Critical only)
     elif state == "mitigation_required":
-        # Validate the response isn't generic/uninformative
         uninformative_phrases = [
             'no idea', 'don\'t know', 'don\'t care', 'not sure', 
             'dunno', 'idk', 'whatever', 'none', 'n/a', 'na', 
@@ -542,23 +585,23 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         
         user_lower = user_message.lower().strip()
         
-        # Check if response is too short or uninformative
         if len(user_message.strip()) < 30 or any(phrase in user_lower for phrase in uninformative_phrases):
-            context_msg = f"User provided uninformative mitigation plan: '{user_message}'. This is unacceptable for {st.session_state.assessment_result['risk_rating']} risk. Firmly explain they must provide a specific, actionable mitigation plan with concrete steps (e.g., 'retrain model with cleaned data', 'rollback to v2.1', 'add monitoring alerts', 'review feature engineering pipeline', etc.)."
+            context_msg = f"User provided uninformative mitigation plan: '{user_message}'. This is unacceptable for {st.session_state.assessment_result['risk_rating']} risk. Firmly explain they must provide a specific, actionable mitigation plan with concrete steps."
             return get_llama_response(context_msg, model_database, criteria_database)
         
-        # Response is acceptable - save and complete
-        st.session_state.mitigation_plan = user_message
+        # Refine the user's answer
+        refined_mitigation = refine_text_with_llama(user_message, "mitigation")
+        st.session_state.mitigation_plan = refined_mitigation
         st.session_state.current_state = "assessment_complete"
         
-        # Log to Google Sheets with reason and mitigation
+        # Log to Google Sheets with refined reason and mitigation
         if log_assessment_to_gsheet_with_details(st.session_state.assessment_result, 
                                                    st.session_state.degradation_reason,
                                                    st.session_state.mitigation_plan):
             st.session_state.logged_to_gsheet = True
         
         result = st.session_state.assessment_result
-        context_msg = f"Excellent. Assessment complete with required documentation. Model {result['model_id']} - Risk: {result['risk_rating']}. Reason and mitigation plan have been recorded. Tell user everything is logged and ask if they want to assess another model."
+        context_msg = f"Excellent. Assessment complete. You refined their mitigation plan to: '{refined_mitigation}'. Tell user everything is documented professionally and logged. Ask if they want to assess another model."
         return get_llama_response(context_msg, model_database, criteria_database)
     
     # State: assessment_complete - assessment done
