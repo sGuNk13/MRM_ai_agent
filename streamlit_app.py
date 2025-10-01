@@ -141,13 +141,27 @@ def initialize_session_state():
 # ============================================================================
 
 def log_assessment_to_gsheet(assessment_dict: Dict) -> bool:
-    """Log assessment to Google Sheets"""
+    """Log assessment to Google Sheets with monthly sheet selection"""
     if st.session_state.gsheet_client is None:
         return False
     
     try:
         sheet = st.session_state.gsheet_client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
-        worksheet = sheet.sheet1
+        
+        # Get current month name
+        current_month = datetime.now().strftime('%B')  # e.g., "October", "November"
+        
+        # Try to get the worksheet for current month
+        try:
+            worksheet = sheet.worksheet(current_month)
+        except gspread.exceptions.WorksheetNotFound:
+            # Sheet doesn't exist, create it
+            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=10)
+            
+            # Add headers to new sheet
+            headers = ['timestamp', 'model_id', 'metric', 'baseline', 
+                      'current_performance', 'deviation', 'risk_rating']
+            worksheet.append_row(headers)
         
         row_data = [
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
