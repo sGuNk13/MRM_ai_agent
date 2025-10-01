@@ -598,17 +598,21 @@ def main():
     # Custom CSS to flip chat positions
     st.markdown("""
         <style>
-        /* Move user messages to right */
-        .stChatMessage[data-testid="user-message"] {
-            flex-direction: row-reverse;
-        }
-        .stChatMessage[data-testid="user-message"] .stMarkdown {
-            text-align: right;
+        /* Target user messages - move to right */
+        [data-testid="stChatMessageContent"]:has(+ [data-testid="stChatMessageAvatar"]:contains("👤")) {
+            margin-left: auto;
+            margin-right: 0;
         }
         
-        /* Move assistant messages to left (default, but explicit) */
-        .stChatMessage[data-testid="assistant-message"] {
+        /* Alternative approach - use nth-child if avatars alternate consistently */
+        div[data-testid="stChatMessage"]:nth-child(even) {
+            flex-direction: row-reverse;
+            justify-content: flex-start;
+        }
+        
+        div[data-testid="stChatMessage"]:nth-child(odd) {
             flex-direction: row;
+            justify-content: flex-start;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -667,14 +671,18 @@ Upload them to your GitHub repository and redeploy.
         st.write(f"**State:** {st.session_state.current_state}")
         if st.session_state.model_id:
             st.write(f"**Model:** {st.session_state.model_id}")
-    
-    # Display chat messages with cat avatars
+
+    # Display chat messages with manual layout control
     for msg in st.session_state.messages:
         if msg['role'] == 'user':
-            with st.chat_message(msg['role'], avatar="👤"):
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                st.markdown(f"**👤 You**")
                 st.markdown(msg['content'])
         else:
-            with st.chat_message(msg['role'], avatar="🐱"):
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown(f"**🐱 Assistant**")
                 st.markdown(msg['content'])
     
     # Display assessment card if available
