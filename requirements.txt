@@ -4,3 +4,4 @@ openpyxl
 groq
 gspread
 oauth2client
+streamlit-chat
