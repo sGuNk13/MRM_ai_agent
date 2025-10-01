@@ -661,11 +661,15 @@ Upload them to your GitHub repository and redeploy.
     if st.session_state.groq_client is None:
         st.error("GROQ_API_KEY not configured. Add it to Streamlit secrets to enable AI responses.")
         st.info("Set up: .streamlit/secrets.toml with GROQ_API_KEY = 'your-key-here'")
+
+    # Display chat messages with cat avatars
+    from streamlit_chat import message as st_message
     
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message['role']):
-            st.markdown(message['content'])
+    for idx, msg in enumerate(st.session_state.messages):
+        if msg['role'] == 'user':
+            st_message(msg['content'], is_user=True, key=f"user_{idx}", avatar_style="adventurer")
+        else:
+            st_message(msg['content'], is_user=False, key=f"bot_{idx}", avatar_style="bottts-neutral")
     
     # Display assessment if available and in right state
     if (st.session_state.assessment_result and 
