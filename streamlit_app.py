@@ -1,21 +1,13 @@
 """
 AI Model Assessment Agent - Streamlit Version
 ==============================================
-Complete AI-powered chatbot with:
-- Conversation memory via Streamlit session state
-- Natural language understanding via Llama
-- Fuzzy model matching
-- Risk assessment with detailed reports
-- Google Sheets logging
-
-Author: Financial Engineering Team
-Version: 1.1 (with Google Sheets Integration)
+Natural conversational AI with Llama integration
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from dataclasses import dataclass, field
 import re
 from groq import Groq
@@ -29,7 +21,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(
     page_title="AI Model Assessment Agent",
-    page_icon="🤖",
+    page_icon="🐱",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -44,12 +36,6 @@ CRITERIA_DATABASE_FILE = "mockup_criteria.xlsx"
 # ============================================================================
 # DATA MODELS
 # ============================================================================
-
-@dataclass
-class ChatMessage:
-    role: str
-    content: str
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 @dataclass
 class ModelPerformance:
@@ -81,7 +67,6 @@ def load_databases():
     """Load required Excel databases with error handling"""
     errors = []
     
-    # Check if files exist
     if not os.path.exists(MODEL_DATABASE_FILE):
         errors.append(f"Missing required file: {MODEL_DATABASE_FILE}")
     
@@ -91,12 +76,10 @@ def load_databases():
     if errors:
         raise FileNotFoundError("\n".join(errors))
     
-    # Load the files
     try:
         model_db = pd.read_excel(MODEL_DATABASE_FILE)
         criteria_db = pd.read_excel(CRITERIA_DATABASE_FILE)
         
-        # Validate required columns
         required_model_cols = ['model_id', 'baseline_performance', 'metric']
         required_criteria_cols = ['metric', 'low_threshold', 'medium_threshold', 'high_threshold']
         
@@ -131,9 +114,6 @@ def initialize_session_state():
     
     if 'model_id' not in st.session_state:
         st.session_state.model_id = None
-    
-    if 'current_performance' not in st.session_state:
-        st.session_state.current_performance = None
     
     if 'assessment_result' not in st.session_state:
         st.session_state.assessment_result = None
@@ -186,24 +166,21 @@ def log_assessment_to_gsheet(assessment_dict: Dict) -> bool:
         return False
 
 # ============================================================================
-# AI AGENT CORE FUNCTIONS
+# CORE ASSESSMENT FUNCTIONS
 # ============================================================================
 
 def find_model_info(model_id: str, database: pd.DataFrame) -> Optional[Dict]:
     """Find model with intelligent fuzzy matching"""
     model_id_clean = model_id.strip().upper()
     
-    # Exact match
     model_row = database[database['model_id'].str.strip().str.upper() == model_id_clean]
     if not model_row.empty:
         return model_row.iloc[0].to_dict()
     
-    # Contains match
     similar = database[database['model_id'].str.upper().str.contains(model_id_clean, na=False)]
     if not similar.empty:
         return similar.iloc[0].to_dict()
     
-    # Partial match (remove special characters)
     clean_search = re.sub(r'[^A-Z0-9]', '', model_id_clean)
     for _, row in database.iterrows():
         clean_row = re.sub(r'[^A-Z0-9]', '', row['model_id'].upper())
@@ -220,11 +197,9 @@ def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
         'high': criteria.get('high_threshold', 30.0)
     }
     
-    # Performance improvement = low risk
     if deviation_percentage > 0:
         return "Low"
     
-    # Performance degradation = risk based on thresholds
     abs_degradation = abs(deviation_percentage)
     
     if abs_degradation <= thresholds['low']:
@@ -282,7 +257,9 @@ def extract_model_id(message: str, model_database: pd.DataFrame) -> Optional[str
     for pattern in patterns:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
-            return match.group(0).upper().replace(' ', '_')
+            candidate = match.group(0).upper().replace(' ', '_')
+            if find_model_info(candidate, model_database):
+                return candidate
     
     words = message.upper().split()
     for word in words:
@@ -302,101 +279,114 @@ def extract_number(message: str) -> Optional[float]:
             pass
     return None
 
-def get_llama_response(user_message: str, conversation_context: str) -> str:
-    """Get response from Llama via Groq"""
+# ============================================================================
+# AI CONVERSATION ENGINE
+# ============================================================================
+
+def build_context(model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
+    """Build rich context for Llama"""
+    
+    models_list = "\n".join([f"- {row['model_id']} (Metric: {row['metric']}, Baseline: {row['baseline_performance']})" 
+                             for _, row in model_database.head(10).iterrows()])
+    
+    criteria_list = "\n".join([f"- {row['metric']}: Low ≤{row['low_threshold']}%, Medium ≤{row['medium_threshold']}%, High ≤{row['high_threshold']}%" 
+                               for _, row in criteria_database.iterrows()])
+    
+    state = st.session_state.current_state
+    model_id = st.session_state.model_id
+    
+    context = f"""You are a helpful AI assistant for model performance assessment.
+
+CURRENT STATE: {state}
+
+AVAILABLE MODELS (first 10):
+{models_list}
+
+RISK CRITERIA:
+{criteria_list}
+
+CONVERSATION FLOW:
+1. greeting -> User wants to assess a model or ask questions
+2. model_input -> Waiting for user to provide a model ID
+3. performance_input -> Model {model_id if model_id else '[pending]'} selected, waiting for current performance value
+4. assessment_complete -> Assessment done, user can request report or assess another model
+
+YOUR ROLE:
+- Have natural, helpful conversations
+- Guide users through the assessment process
+- Answer questions about models, metrics, and risk ratings
+- Be conversational but professional
+- When user provides model ID or performance value, acknowledge it clearly
+
+IMPORTANT:
+- Keep responses concise (2-3 sentences unless explaining something complex)
+- Don't repeat the entire state/context back to the user
+- Be helpful and friendly without being overly verbose"""
+    
+    return context
+
+def get_llama_response(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
+    """Get natural response from Llama"""
     if st.session_state.groq_client is None:
-        return "AI unavailable. Please configure GROQ_API_KEY in Streamlit secrets."
+        return "I need the GROQ_API_KEY to respond. Please configure it in Streamlit secrets."
     
     try:
-        system_prompt = f"""You are an AI Model Assessment Assistant. 
-{conversation_context}
-
-Respond naturally and helpfully. Keep responses concise but informative.
-If the user is asking about assessing models, guide them through the process.
-If they provide model IDs or performance values, acknowledge them clearly."""
-
+        context = build_context(model_database, criteria_database)
+        
+        # Build conversation history for Llama
+        messages = [{"role": "system", "content": context}]
+        
+        # Add recent conversation history (last 6 messages for context)
+        for msg in st.session_state.messages[-6:]:
+            messages.append({"role": msg['role'], "content": msg['content']})
+        
+        # Add current message
+        messages.append({"role": "user", "content": user_message})
+        
         completion = st.session_state.groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+            messages=messages,
             temperature=0.7,
-            max_tokens=300
+            max_tokens=400
         )
         
         return completion.choices[0].message.content
     except Exception as e:
         return f"Error calling Llama: {str(e)}"
 
-def understand_intent(message: str) -> str:
-    """Understand user intent from natural language"""
-    message_lower = message.lower().strip()
-    
-    if any(word in message_lower for word in ['assess', 'evaluate', 'check', 'test', 'analyze']):
-        return 'assess'
-    if any(word in message_lower for word in ['list', 'show', 'view', 'display', 'all models']):
-        return 'list'
-    if any(word in message_lower for word in ['help', 'how', 'what can', 'guide']):
-        return 'help'
-    if any(word in message_lower for word in ['hi', 'hello', 'hey', 'greetings']):
-        return 'greeting'
-    if any(word in message_lower for word in ['criteria', 'threshold', 'risk', 'rating']):
-        return 'criteria'
-    if any(word in message_lower for word in ['reset', 'start over', 'new', 'clear']):
-        return 'reset'
-    
-    return 'unknown'
+# ============================================================================
+# STATE MACHINE
+# ============================================================================
 
-def generate_ai_response(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
-    """Generate AI response based on conversation state"""
+def process_user_input(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
+    """Process user input and manage state transitions"""
     
-    # Check for reset
-    if understand_intent(user_message) == 'reset':
+    # Check for reset request
+    if any(word in user_message.lower() for word in ['reset', 'start over', 'restart']):
         st.session_state.current_state = "greeting"
         st.session_state.model_id = None
-        st.session_state.current_performance = None
         st.session_state.assessment_result = None
-        return "Chat reset. What would you like to do?"
+        return get_llama_response("User wants to reset/start over. Acknowledge the reset and ask what they'd like to do.", model_database, criteria_database)
     
-    # State machine logic
-    if st.session_state.current_state == "greeting":
-        intent = understand_intent(user_message)
+    state = st.session_state.current_state
+    
+    # State: greeting - open conversation
+    if state == "greeting":
+        # Check if user mentions wanting to assess a model
+        model_id = extract_model_id(user_message, model_database)
         
-        if intent == 'assess':
-            model_id = extract_model_id(user_message, model_database)
-            if model_id:
-                model_info = find_model_info(model_id, model_database)
-                if model_info:
-                    st.session_state.model_id = model_id
-                    st.session_state.current_state = "performance_input"
-                    baseline = model_info.get('baseline_performance', model_info.get('baseline'))
-                    metric = model_info.get('metric')
-                    return f"Great! Found {model_id}.\nMetric: {metric}\nBaseline: {baseline}\n\nWhat's the current performance value?"
-                else:
-                    st.session_state.current_state = "model_input"
-                    return "Let's assess a model. Please enter the Model ID."
-            else:
-                st.session_state.current_state = "model_input"
-                return "Let's assess a model. Please enter the Model ID."
-        
-        elif intent == 'list':
-            models = model_database.head(10)
-            models_text = "\n".join([f"• {row['model_id']} ({row['metric']})" 
-                                    for _, row in models.iterrows()])
-            return f"Available Models:\n\n{models_text}\n\nSay 'assess MODEL_ID' to evaluate one!"
-        
-        elif intent == 'criteria':
-            criteria_text = "Risk Assessment Criteria:\n\n"
-            for _, row in criteria_database.iterrows():
-                criteria_text += f"• {row['metric']}: Low ≤{row['low_threshold']}%, Medium ≤{row['medium_threshold']}%, High ≤{row['high_threshold']}%\n"
-            return criteria_text
-        
+        if model_id:
+            model_info = find_model_info(model_id, model_database)
+            st.session_state.model_id = model_id
+            st.session_state.current_state = "performance_input"
+            
+            context_msg = f"User mentioned model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+            return get_llama_response(context_msg, model_database, criteria_database)
         else:
-            context = "User is in greeting state. Guide them to assess models, list models, or ask for help."
-            return get_llama_response(user_message, context)
+            return get_llama_response(user_message, model_database, criteria_database)
     
-    elif st.session_state.current_state == "model_input":
+    # State: model_input - waiting for model ID
+    elif state == "model_input":
         model_id = extract_model_id(user_message, model_database)
         
         if not model_id:
@@ -407,25 +397,28 @@ def generate_ai_response(user_message: str, model_database: pd.DataFrame, criter
         if model_info:
             st.session_state.model_id = model_id
             st.session_state.current_state = "performance_input"
-            baseline = model_info.get('baseline_performance', model_info.get('baseline'))
-            metric = model_info.get('metric')
-            return f"Perfect! Found {model_id}.\nMetric: {metric}\nBaseline: {baseline}\n\nWhat's the current performance value?"
+            
+            context_msg = f"User provided model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+            return get_llama_response(context_msg, model_database, criteria_database)
         else:
             available = list(model_database['model_id'].head(5))
-            return f"Couldn't find '{model_id}'.\n\nTry one of these:\n" + "\n".join([f"• {m}" for m in available])
+            context_msg = f"Model {model_id} not found. Available models include: {', '.join(available)}. Ask user to try one of these or provide a valid model ID."
+            return get_llama_response(context_msg, model_database, criteria_database)
     
-    elif st.session_state.current_state == "performance_input":
+    # State: performance_input - waiting for performance value
+    elif state == "performance_input":
         performance = extract_number(user_message)
         
         if performance is None:
             try:
-                performance = float(user_message)
+                performance = float(user_message.strip())
             except:
-                return "I need a number for the performance value.\n\nExample: 95.5 or 0.89"
+                context_msg = f"User's input '{user_message}' doesn't contain a valid number. Ask them to provide the current performance value as a number."
+                return get_llama_response(context_msg, model_database, criteria_database)
         
         try:
             assessment = process_model_assessment(
-                st.session_state.model_id, 
+                st.session_state.model_id,
                 performance,
                 model_database,
                 criteria_database
@@ -437,26 +430,23 @@ def generate_ai_response(user_message: str, model_database: pd.DataFrame, criter
             if log_assessment_to_gsheet(st.session_state.assessment_result):
                 st.session_state.logged_to_gsheet = True
             
-            return "Assessment complete! See results below.\n\nWould you like to:\n• Assess another model?\n• Get a detailed report?\n• Start over?"
+            result = st.session_state.assessment_result
+            context_msg = f"Assessment complete! Model {result['model_id']} - Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is ready (they'll see the detailed card below). Ask if they want a detailed report or to assess another model."
+            return get_llama_response(context_msg, model_database, criteria_database)
         except Exception as e:
-            return f"Error: {str(e)}"
+            return f"Error during assessment: {str(e)}"
     
-    elif st.session_state.current_state == "assessment_complete":
-        intent = understand_intent(user_message)
-        
-        if intent == 'assess' or 'another' in user_message.lower():
+    # State: assessment_complete - assessment done
+    elif state == "assessment_complete":
+        # Check if user wants to assess another model
+        if any(word in user_message.lower() for word in ['assess', 'another', 'new model', 'next']):
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
-            return "Ready for a new assessment. Which model?"
-        
-        elif 'report' in user_message.lower() or 'detail' in user_message.lower():
-            return "Detailed report is displayed below. Would you like to assess another model?"
-        
+            return get_llama_response("User wants to assess another model. Acknowledge and ask which model they'd like to assess next.", model_database, criteria_database)
         else:
-            context = f"User completed assessment. Result: {st.session_state.assessment_result}"
-            return get_llama_response(user_message, context)
+            return get_llama_response(user_message, model_database, criteria_database)
     
-    return "I'm here to help with model assessments. Try 'assess model' to start."
+    return get_llama_response(user_message, model_database, criteria_database)
 
 # ============================================================================
 # UI COMPONENTS
@@ -466,13 +456,12 @@ def display_assessment_card(assessment_dict: Dict):
     """Display assessment result card"""
     risk_colors = {
         "Low": "#27AE60",
-        "Medium": "#F39C12", 
+        "Medium": "#F39C12",
         "High": "#E67E22",
         "Critical": "#C0392B"
     }
     
     risk_color = risk_colors.get(assessment_dict['risk_rating'], "#95a5a6")
-    
     trend = "improved" if assessment_dict['deviation'] > 0 else "degraded" if assessment_dict['deviation'] < 0 else "unchanged"
     
     st.markdown(f"""
@@ -600,7 +589,7 @@ def main():
     st.title("AI Model Assessment Agent")
     st.caption("Powered by Llama 3.1 via Groq")
     
-    # Load databases with error handling
+    # Load databases
     try:
         model_database, criteria_database = load_databases()
     except FileNotFoundError as e:
@@ -633,14 +622,12 @@ Upload them to your GitHub repository and redeploy.
         
         st.divider()
         
-        # Actions
         st.subheader("Actions")
         
         if st.button("Reset Conversation", use_container_width=True):
             st.session_state.messages = []
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
-            st.session_state.current_performance = None
             st.session_state.assessment_result = None
             st.rerun()
         
@@ -657,26 +644,20 @@ Upload them to your GitHub repository and redeploy.
         if st.session_state.model_id:
             st.write(f"**Model:** {st.session_state.model_id}")
     
-    # Check Groq API
-    if st.session_state.groq_client is None:
-        st.error("GROQ_API_KEY not configured. Add it to Streamlit secrets to enable AI responses.")
-        st.info("Set up: .streamlit/secrets.toml with GROQ_API_KEY = 'your-key-here'")
-
     # Display chat messages with cat avatars
-    from streamlit_chat import message as st_message
-    
-    for idx, msg in enumerate(st.session_state.messages):
+    for msg in st.session_state.messages:
         if msg['role'] == 'user':
-            st_message(msg['content'], is_user=True, key=f"user_{idx}", avatar_style="adventurer", seed=123)
+            with st.chat_message(msg['role'], avatar="👤"):
+                st.markdown(msg['content'])
         else:
-            st_message(msg['content'], is_user=False, key=f"bot_{idx}", avatar_style="bottts-neutral", seed=42)
+            with st.chat_message(msg['role'], avatar="🐱"):
+                st.markdown(msg['content'])
     
-    # Display assessment if available and in right state
+    # Display assessment card if available
     if (st.session_state.assessment_result and 
         st.session_state.current_state == "assessment_complete"):
         display_assessment_card(st.session_state.assessment_result)
         
-        # Show Google Sheets log status
         if st.session_state.get('logged_to_gsheet'):
             st.success("Assessment logged to Google Sheets")
         elif st.session_state.gsheet_client is None:
@@ -694,16 +675,12 @@ Upload them to your GitHub repository and redeploy.
     
     # Chat input
     if prompt := st.chat_input("Type your message..."):
-        # Add user message
         st.session_state.messages.append({'role': 'user', 'content': prompt})
         
-        # Generate AI response
-        response = generate_ai_response(prompt, model_database, criteria_database)
+        response = process_user_input(prompt, model_database, criteria_database)
         
-        # Add assistant message
         st.session_state.messages.append({'role': 'assistant', 'content': response})
         
-        # Rerun to update UI
         st.rerun()
 
 if __name__ == "__main__":
