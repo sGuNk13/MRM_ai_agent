@@ -382,8 +382,9 @@ CONVERSATION FLOW:
 YOUR ROLE:
 - Have natural, helpful conversations
 - Guide users through the assessment process
-- When in model_input state and user hasn't provided a model ID yet, simply ask "Which model ID would you like to assess?" - DO NOT mention any specific model IDs
-- Be conversational and concise (2-3 sentences)"""
+- Be conversational and concise (2-3 sentences)
+- When asking for mitigation plans, keep it simple - don't provide lengthy checklists or sub-questions
+- Trust users to provide appropriate detail without excessive prompting"""
     
     return context
 
@@ -588,7 +589,7 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         st.session_state.degradation_reason = refined_reason
         st.session_state.current_state = "mitigation_required"
         
-        context_msg = f"User provided reason. You refined it to: '{refined_reason}'. Acknowledge you've documented their explanation and now ask for their MITIGATION PLAN - specific actions they will take to address this {st.session_state.assessment_result['risk_rating']} risk."
+        context_msg = f"User explained the degradation reason. Acknowledge it briefly, then simply ask: 'What's your mitigation plan to address this issue?' Keep it short - don't provide a long list of sub-questions."
         return get_llama_response(context_msg, model_database, criteria_database)
     
     # State: mitigation_required - waiting for mitigation plan (High/Critical only)
