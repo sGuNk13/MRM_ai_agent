@@ -390,37 +390,42 @@ YOUR ROLE:
 def refine_text_with_llama(text: str, field_type: str) -> str:
     """Use Llama to refine user's answer into formal professional English"""
     if st.session_state.groq_client is None:
-        return text  # Return original if Llama unavailable
+        return text
     
     try:
         if field_type == "reason":
-            prompt = f"""Refine the following explanation of model performance degradation into clear, formal, professional English suitable for technical documentation. Keep the core meaning but improve clarity, grammar, and professionalism. Keep it concise (2-3 sentences max).
+            prompt = f"""Refine this explanation into 1-2 clear, professional sentences. Keep the original meaning, just improve grammar and formality. Do not add extra details.
 
 Original: {text}
 
-Refined version:"""
+Refined:"""
         else:  # mitigation
-            prompt = f"""Refine the following mitigation plan into clear, formal, professional English suitable for technical documentation. Structure it as concrete, actionable steps. Keep the core actions but improve clarity, grammar, and professionalism.
+            prompt = f"""Refine this mitigation plan into 2-3 clear, professional sentences. Keep it concise - just improve grammar and formality. Do not expand or add steps that weren't mentioned.
 
 Original: {text}
 
-Refined version:"""
+Refined:"""
         
         completion = st.session_state.groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You are a technical writing assistant. Refine text into professional, formal English while preserving the original meaning."},
+                {"role": "system", "content": "You refine text to be professional and grammatically correct. Keep responses BRIEF - only improve the original, don't expand it."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,  # Lower temperature for more consistent refinement
-            max_tokens=300
+            temperature=0.2,  # Very low temperature for minimal creativity
+            max_tokens=150     # Limit length
         )
         
         refined = completion.choices[0].message.content.strip()
-        return refined if refined else text  # Fallback to original if refinement fails
+        
+        # Safety check - if refined is more than 2x original length, use original
+        if len(refined) > len(text) * 2:
+            return text
+        
+        return refined if refined else text
         
     except Exception as e:
-        return text  # Return original if error occurs
+        return text
 
 def get_llama_response(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
     """Get natural response from Llama"""
