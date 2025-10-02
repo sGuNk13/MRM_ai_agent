@@ -363,28 +363,53 @@ AVAILABLE MODELS:
     criteria_list = "\n".join([f"- {row['metric']}: Low ≤{row['low_threshold']}%, Medium ≤{row['medium_threshold']}%, High ≤{row['high_threshold']}%" 
                                for _, row in criteria_database.iterrows()])
     
+    # Only show current assessment details if we're in assessment_complete state
+    if state == "assessment_complete" and st.session_state.assessment_result:
+        assessment_info = f"""
+COMPLETED ASSESSMENT:
+- Model: {st.session_state.assessment_result['model_id']}
+- Metric: {st.session_state.assessment_result['metric']}
+- Deviation: {st.session_state.assessment_result['deviation']:.2f}%
+- Risk: {st.session_state.assessment_result['risk_rating']}
+"""
+    else:
+        assessment_info = ""
+    
     context = f"""You are a helpful AI assistant for model performance assessment.
 
 CURRENT STATE: {state}
-{f"SELECTED MODEL: {model_id}" if model_id else ""}
+{f"SELECTED MODEL: {model_id}" if model_id and state != "greeting" else ""}
 
 {models_context}
 
 RISK CRITERIA:
 {criteria_list}
 
+{assessment_info}
+
 CONVERSATION FLOW:
 1. greeting -> User wants to assess a model or ask questions
 2. model_input -> Waiting for user to provide a model ID
 3. performance_input -> Model {model_id if model_id else '[pending]'} selected, waiting for current performance value
-4. assessment_complete -> Assessment done
+4. reason_required -> For High/Critical risk only - asking for degradation reason
+5. mitigation_required -> For High/Critical risk only - asking for mitigation plan
+6. assessment_complete -> Assessment done
 
 YOUR ROLE:
 - Have natural, helpful conversations
 - Guide users through the assessment process
-- Be conversational and concise (2-3 sentences)
+- When in model_input state and user hasn't provided a model ID yet, simply ask "Which model ID would you like to assess?" - DO NOT mention any specific model IDs
 - When asking for mitigation plans, keep it simple - don't provide lengthy checklists or sub-questions
-- Trust users to provide appropriate detail without excessive prompting"""
+- Trust users to provide appropriate detail without excessive prompting
+- Be conversational and concise (2-3 sentences)
+- NEVER reference or mention metrics, model IDs, or assessment results from previous assessments
+- Each assessment is independent - clear your memory of past assessments when starting a new one
+
+CRITICAL INSTRUCTIONS:
+- Only use models from the exact list provided above
+- Do not invent or suggest models that are not listed
+- When asking user which model to assess, do NOT mention specific model IDs unless they ask for examples
+- Focus only on the CURRENT assessment - ignore any data from previous assessments"""
     
     return context
 
@@ -491,15 +516,15 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 if not model_database[model_database['model_id'] == clean_word].empty:
                     found_model = clean_word
                     break
-            
             if found_model:
-                # User mentioned a valid model ID - skip to performance input
                 model_info = find_model_info(found_model, model_database)
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
                 st.session_state.assessment_result = None
                 st.session_state.logged_to_gsheet = False
-                
+                st.session_state.degradation_reason = None
+                st.session_state.mitigation_plan = None
+                            
                 context_msg = f"User wants to assess model {found_model}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
                 return get_llama_response(context_msg, model_database, criteria_database)
             else:
