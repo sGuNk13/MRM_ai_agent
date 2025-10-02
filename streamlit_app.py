@@ -583,8 +583,16 @@ Follow this exact structure to inform the user."""
             try:
                 performance = float(user_message.strip())
             except:
-                context_msg = f"User's input '{user_message}' doesn't contain a valid number. Ask them to provide the current performance value as a number."
+                model_info = find_model_info(st.session_state.model_id, model_database)
+                metric = model_info['metric'] if model_info else 'performance'
+                
+                context_msg = f"User's input '{user_message}' is not a number. We need the numeric {metric} value. Ask them to provide just the number."
                 return get_llama_response(context_msg, model_database, criteria_database)
+        
+        # Log for debugging
+        st.write(f"DEBUG: Extracted performance value: {performance}")
+        st.write(f"DEBUG: Current model_id: {st.session_state.model_id}")
+        st.write(f"DEBUG: Current state: {st.session_state.current_state}")
         
         try:
             assessment = process_model_assessment(
@@ -593,27 +601,30 @@ Follow this exact structure to inform the user."""
                 model_database,
                 criteria_database
             )
-            st.session_state.assessment_result = assessment.to_dict()
             
-            # Check if High or Critical - require additional info
+            st.write(f"DEBUG: Assessment result: {assessment.to_dict()}")
+            
+            st.session_state.assessment_result = assessment.to_dict()
             risk_rating = st.session_state.assessment_result['risk_rating']
+            
+            st.write(f"DEBUG: Risk rating: {risk_rating}")
             
             if risk_rating in ['High', 'Critical']:
                 st.session_state.current_state = "reason_required"
-                context_msg = f"Assessment shows {risk_rating} risk with {assessment.deviation_percentage:.2f}% degradation. This is serious. Ask user to explain the REASON for this performance degradation. Emphasize that vague answers like 'I don't know' or 'no idea' are not acceptable - they must provide specific analysis."
+                context_msg = f"Assessment shows {risk_rating} risk with {assessment.deviation_percentage:.2f}% degradation. Ask user to explain the REASON for this performance degradation. Vague answers are not acceptable."
                 return get_llama_response(context_msg, model_database, criteria_database)
             else:
-                # Low/Medium risk - complete normally
                 st.session_state.current_state = "assessment_complete"
                 
-                # Log to Google Sheets
                 if log_assessment_to_gsheet(st.session_state.assessment_result):
                     st.session_state.logged_to_gsheet = True
                 
                 result = st.session_state.assessment_result
-                context_msg = f"Assessment complete! Model {result['model_id']} - Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is ready. Ask if they want to assess another model."
+                context_msg = f"Assessment complete! Model {result['model_id']}: Current {result['current']} vs Baseline {result['baseline']}. Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is complete (results shown below). Ask if they want to assess another model."
                 return get_llama_response(context_msg, model_database, criteria_database)
+                
         except Exception as e:
+            st.write(f"DEBUG: Error in assessment: {str(e)}")
             return f"Error during assessment: {str(e)}"
 
     # State: reason_required - waiting for degradation reason (High/Critical only)
