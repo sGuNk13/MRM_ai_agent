@@ -506,30 +506,35 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
         if wants_assessment:
-            # Try to find ANY word that matches an actual model ID in the database
-            found_model = None
-            words = user_message.split()
+            # Try to extract model ID using the pattern
+            found_model = extract_model_id(user_message, model_database)
             
-            for word in words:
-                clean_word = word.strip('.,!?()[]{}"\' ')
-                # Check if this exact word exists as a model_id in database
-                if not model_database[model_database['model_id'] == clean_word].empty:
-                    found_model = clean_word
-                    break
             if found_model:
                 model_info = find_model_info(found_model, model_database)
+                
+                # Clear all previous assessment data
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
                 st.session_state.assessment_result = None
                 st.session_state.logged_to_gsheet = False
                 st.session_state.degradation_reason = None
                 st.session_state.mitigation_plan = None
-                            
-                context_msg = f"User wants to assess model {found_model}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+                
+                context_msg = f"""User wants to assess model {found_model}.
+Respond EXACTLY in this format:
+"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
+
+To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
+
+Follow this exact structure to inform the user."""
+                
                 return get_llama_response(context_msg, model_database, criteria_database)
             else:
-                # No valid model ID found - ask for it
+                # No model ID found - ask for it
                 st.session_state.current_state = "model_input"
+                st.session_state.model_id = None
+                st.session_state.assessment_result = None
+                
                 context_msg = "User wants to assess a model but didn't specify which one. Ask them which model ID they want to assess."
                 return get_llama_response(context_msg, model_database, criteria_database)
         else:
@@ -537,22 +542,37 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
     
     # State: model_input - waiting for model ID
     elif state == "model_input":
-        model_id = extract_model_id(user_message, model_database)
+        # Try to extract model ID
+        found_model = extract_model_id(user_message, model_database)
         
-        if not model_id:
-            model_id = user_message.upper().replace(' ', '_')
+        if not found_model:
+            # Try exact match with cleaned input
+            clean_input = user_message.strip().upper()
+            if not model_database[model_database['model_id'].str.upper() == clean_input].empty:
+                found_model = clean_input
         
-        model_info = find_model_info(model_id, model_database)
-        
-        if model_info:
-            st.session_state.model_id = model_id
-            st.session_state.current_state = "performance_input"
+        if found_model:
+            model_info = find_model_info(found_model, model_database)
             
-            context_msg = f"User provided model {model_id}. Confirm you found it (metric: {model_info['metric']}, baseline: {model_info['baseline_performance']}) and ask for the current performance value."
+            # Clear all previous data
+            st.session_state.model_id = found_model
+            st.session_state.current_state = "performance_input"
+            st.session_state.assessment_result = None
+            st.session_state.logged_to_gsheet = False
+            st.session_state.degradation_reason = None
+            st.session_state.mitigation_plan = None
+            
+            context_msg = f"""User selected model {found_model}.
+Respond EXACTLY in this format:
+"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
+
+To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
+
+Follow this exact structure to inform the user."""
+            
             return get_llama_response(context_msg, model_database, criteria_database)
         else:
-            available = list(model_database['model_id'].head(5))
-            context_msg = f"Model {model_id} not found. Available models include: {', '.join(available)}. Ask user to try one of these or provide a valid model ID."
+            context_msg = f"'{user_message}' is not a valid model ID. Ask user to provide a valid model ID from the database."
             return get_llama_response(context_msg, model_database, criteria_database)
     
     # State: performance_input - waiting for performance value
