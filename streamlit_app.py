@@ -304,25 +304,31 @@ def process_model_assessment(model_id: str, current_performance: float,
     )
 
 def extract_model_id(message: str, model_database: pd.DataFrame) -> Optional[str]:
-    """Extract model ID from message - strict matching only"""
+    """Extract model ID from message - handles multiple formats"""
     
-    # Only look for specific patterns like MODEL_001, model_id_1234, etc.
+    # Pattern for real production format: CRR_XXX_###_##_##
+    # Pattern for test format: model_id_####
     patterns = [
-        r'MODEL[_\s-]?\d+',
-        r'model_id[_\s-]?\d+',
-        r'\bM\d+\b',
+        r'\b[A-Z]{3}_[A-Z]{3}_\d+(?:_\d+)*\b',  # CRR_OTH_233 or CRR_OTH_444_02_01
+        r'\bmodel_id_\d+\b',                      # model_id_1234 (test format)
     ]
     
     for pattern in patterns:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            candidate = match.group(0).upper().replace(' ', '_')
-            # Verify it actually exists in database
-            if find_model_info(candidate, model_database):
-                return candidate
+        matches = re.findall(pattern, message.lower())  # Use lower() for case-insensitive
+        for match in matches:
+            # Verify it exists in database (case-insensitive check)
+            if not model_database[model_database['model_id'].str.lower() == match.lower()].empty:
+                # Return the actual model_id from database (preserves original case)
+                actual_id = model_database[model_database['model_id'].str.lower() == match.lower()].iloc[0]['model_id']
+                return actual_id
     
-    # DON'T do fuzzy word matching - it causes false positives
-    # The old code that checked every word is removed
+    # Exact word match as fallback
+    words = message.split()
+    for word in words:
+        clean_word = word.strip('.,!?()[]{}"\' ')
+        if not model_database[model_database['model_id'].str.lower() == clean_word.lower()].empty:
+            actual_id = model_database[model_database['model_id'].str.lower() == clean_word.lower()].iloc[0]['model_id']
+            return actual_id
     
     return None
 
