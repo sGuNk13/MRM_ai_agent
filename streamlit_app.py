@@ -595,11 +595,6 @@ Follow this exact structure to inform the user."""
                 context_msg = f"User's input '{user_message}' is not a number. We need the numeric {metric} value. Ask them to provide just the number."
                 return get_llama_response(context_msg, model_database, criteria_database)
         
-        # Log for debugging
-        st.write(f"DEBUG: Extracted performance value: {performance}")
-        st.write(f"DEBUG: Current model_id: {st.session_state.model_id}")
-        st.write(f"DEBUG: Current state: {st.session_state.current_state}")
-        
         try:
             assessment = process_model_assessment(
                 st.session_state.model_id,
@@ -608,12 +603,8 @@ Follow this exact structure to inform the user."""
                 criteria_database
             )
             
-            st.write(f"DEBUG: Assessment result: {assessment.to_dict()}")
-            
             st.session_state.assessment_result = assessment.to_dict()
             risk_rating = st.session_state.assessment_result['risk_rating']
-            
-            st.write(f"DEBUG: Risk rating: {risk_rating}")
             
             if risk_rating in ['High', 'Critical']:
                 st.session_state.current_state = "reason_required"
@@ -626,11 +617,10 @@ Follow this exact structure to inform the user."""
                     st.session_state.logged_to_gsheet = True
                 
                 result = st.session_state.assessment_result
-                context_msg = f"Assessment complete! Model {result['model_id']}: Current {result['current']} vs Baseline {result['baseline']}. Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is complete (results shown below). Ask if they want to assess another model."
+                context_msg = f"Assessment complete! Model {result['model_id']}: Current {result['current']} vs Baseline {result['baseline']}. Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is complete (results shown below). Ask if they want to assess another model. Do not ask if the value is good or if there's a concern - just state the facts."
                 return get_llama_response(context_msg, model_database, criteria_database)
                 
         except Exception as e:
-            st.write(f"DEBUG: Error in assessment: {str(e)}")
             return f"Error during assessment: {str(e)}"
 
     # State: reason_required - waiting for degradation reason (High/Critical only)
