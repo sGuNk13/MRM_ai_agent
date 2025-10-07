@@ -230,12 +230,22 @@ Follow this exact structure to inform the user."""
             if not model_database[model_database['model_id'].str.upper() == clean_input].empty:
                 found_model = clean_input
         
+        elif state == "model_input":
+        # CRITICAL: Clear old assessment immediately when entering model_input
+        st.session_state.assessment_result = None
+        st.session_state.logged_to_gsheet = False
+        
+        found_model = extract_model_id(user_message, model_database)
+        
+        if not found_model:
+            clean_input = user_message.strip().upper()
+            if not model_database[model_database['model_id'].str.upper() == clean_input].empty:
+                found_model = clean_input
+        
         if found_model:
             model_info = find_model_info(found_model, model_database)
             st.session_state.model_id = found_model
             st.session_state.current_state = "performance_input"
-            st.session_state.assessment_result = None
-            st.session_state.logged_to_gsheet = False
             st.session_state.degradation_reason = None
             st.session_state.mitigation_plan = None
             
@@ -327,6 +337,11 @@ Follow this exact structure to inform the user."""
                                                    st.session_state.mitigation_plan,
                                                    st.session_state.gsheet_client):
             st.session_state.logged_to_gsheet = True
+        
+        # AUTO-CLEAR: Reset for next assessment
+        st.session_state.model_id = None
+        st.session_state.degradation_reason = None
+        st.session_state.mitigation_plan = None
         
         result = st.session_state.assessment_result
         context_msg = f"Excellent. Assessment complete. Tell user everything is documented and logged. Ask if they want to assess another model."
