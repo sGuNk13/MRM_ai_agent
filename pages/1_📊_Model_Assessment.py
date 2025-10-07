@@ -206,18 +206,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 # CRITICAL: Clear conversation history to prevent metric confusion
                 st.session_state.messages = []
                 
-                context_msg = f"""User wants to assess a NEW model: {found_model}.
-This is a FRESH assessment - ignore any previous models or metrics mentioned.
-Model details: Metric: {model_info['metric']}, Baseline: {model_info['baseline_performance']}.
-
-Respond EXACTLY in this format:
-"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
-
-To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
-
-CRITICAL: The metric for THIS model is {model_info['metric']} - do NOT mention any other metrics."""
-                
-                return get_llama_response(context_msg, model_database, criteria_database)
+                # Return HARDCODED response - don't let Llama mess it up
+                return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
             else:
                 st.session_state.current_state = "model_input"
                 st.session_state.model_id = None
@@ -250,18 +240,8 @@ CRITICAL: The metric for THIS model is {model_info['metric']} - do NOT mention a
             # CRITICAL: Clear conversation history to prevent metric confusion
             st.session_state.messages = []
             
-            context_msg = f"""User selected a NEW model: {found_model}.
-This is a FRESH assessment - completely independent from any previous assessments.
-Model details: Metric: {model_info['metric']}, Baseline: {model_info['baseline_performance']}.
-
-Respond EXACTLY in this format:
-"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
-
-To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
-
-CRITICAL: The metric for THIS model is {model_info['metric']} - do NOT mention F1 or any other metrics."""
-            
-            return get_llama_response(context_msg, model_database, criteria_database)
+            # Return HARDCODED response - don't let Llama paraphrase it
+            return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
         else:
             context_msg = f"'{user_message}' is not a valid model ID. Ask user to provide a valid model ID from the database."
             return get_llama_response(context_msg, model_database, criteria_database)
