@@ -189,16 +189,19 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
         if wants_assessment:
+            # CRITICAL: Clear ALL state before starting new assessment
+            st.session_state.assessment_result = None
+            st.session_state.logged_to_gsheet = False
+            st.session_state.degradation_reason = None
+            st.session_state.mitigation_plan = None
+            st.session_state.model_id = None
+            
             found_model = extract_model_id(user_message, model_database)
             
             if found_model:
                 model_info = find_model_info(found_model, model_database)
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
-                st.session_state.assessment_result = None
-                st.session_state.logged_to_gsheet = False
-                st.session_state.degradation_reason = None
-                st.session_state.mitigation_plan = None
                 
                 context_msg = f"""User wants to assess model {found_model}.
 Respond EXACTLY in this format:
@@ -281,6 +284,9 @@ Follow this exact structure to inform the user."""
                 
                 if log_assessment_to_gsheet(st.session_state.assessment_result, st.session_state.gsheet_client):
                     st.session_state.logged_to_gsheet = True
+                
+                # AUTO-CLEAR: Reset for next assessment
+                st.session_state.model_id = None
                 
                 result = st.session_state.assessment_result
                 context_msg = f"Assessment complete! Model {result['model_id']}: Current {result['current']} vs Baseline {result['baseline']}. Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is complete (results shown below). Ask if they want to assess another model."
