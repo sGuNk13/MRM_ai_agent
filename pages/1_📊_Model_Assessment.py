@@ -200,13 +200,22 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             
             if found_model:
                 model_info = find_model_info(found_model, model_database)
+                
+                # Clear state BEFORE clearing messages
+                st.session_state.assessment_result = None
+                st.session_state.logged_to_gsheet = False
+                st.session_state.degradation_reason = None
+                st.session_state.mitigation_plan = None
+                
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
                 
-                # CRITICAL: Clear conversation history to prevent metric confusion
-                st.session_state.messages = []
+                # Keep only the LATEST user message, remove all history before it
+                if len(st.session_state.messages) > 1:
+                    last_msg = st.session_state.messages[-1]  # Keep current "assess model_id_2345"
+                    st.session_state.messages = [last_msg]
                 
-                # Return HARDCODED response - don't let Llama mess it up
+                # Return HARDCODED response
                 return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
             else:
                 st.session_state.current_state = "model_input"
@@ -232,15 +241,19 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         
         if found_model:
             model_info = find_model_info(found_model, model_database)
+            
             st.session_state.model_id = found_model
             st.session_state.current_state = "performance_input"
+            st.session_state.assessment_result = None
             st.session_state.degradation_reason = None
             st.session_state.mitigation_plan = None
             
-            # CRITICAL: Clear conversation history to prevent metric confusion
-            st.session_state.messages = []
+            # Keep only the LATEST user message
+            if len(st.session_state.messages) > 1:
+                last_msg = st.session_state.messages[-1]
+                st.session_state.messages = [last_msg]
             
-            # Return HARDCODED response - don't let Llama paraphrase it
+            # Return HARDCODED response
             return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
         else:
             context_msg = f"'{user_message}' is not a valid model ID. Ask user to provide a valid model ID from the database."
