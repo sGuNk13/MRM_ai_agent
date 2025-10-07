@@ -4,3 +4,5 @@ openpyxl
 groq
 gspread
 oauth2client
+plotly
+scikit-learn
