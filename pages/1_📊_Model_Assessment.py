@@ -203,13 +203,19 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
                 
-                context_msg = f"""User wants to assess model {found_model}.
+                # CRITICAL: Clear conversation history to prevent metric confusion
+                st.session_state.messages = []
+                
+                context_msg = f"""User wants to assess a NEW model: {found_model}.
+This is a FRESH assessment - ignore any previous models or metrics mentioned.
+Model details: Metric: {model_info['metric']}, Baseline: {model_info['baseline_performance']}.
+
 Respond EXACTLY in this format:
 "You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
 
 To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
 
-Follow this exact structure to inform the user."""
+CRITICAL: The metric for THIS model is {model_info['metric']} - do NOT mention any other metrics."""
                 
                 return get_llama_response(context_msg, model_database, criteria_database)
             else:
@@ -241,13 +247,19 @@ Follow this exact structure to inform the user."""
             st.session_state.degradation_reason = None
             st.session_state.mitigation_plan = None
             
-            context_msg = f"""User selected model {found_model}.
+            # CRITICAL: Clear conversation history to prevent metric confusion
+            st.session_state.messages = []
+            
+            context_msg = f"""User selected a NEW model: {found_model}.
+This is a FRESH assessment - completely independent from any previous assessments.
+Model details: Metric: {model_info['metric']}, Baseline: {model_info['baseline_performance']}.
+
 Respond EXACTLY in this format:
 "You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.
 
 To proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
 
-Follow this exact structure to inform the user."""
+CRITICAL: The metric for THIS model is {model_info['metric']} - do NOT mention F1 or any other metrics."""
             
             return get_llama_response(context_msg, model_database, criteria_database)
         else:
