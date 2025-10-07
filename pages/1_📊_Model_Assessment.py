@@ -223,14 +223,6 @@ Follow this exact structure to inform the user."""
             return get_llama_response(user_message, model_database, criteria_database)
     
     elif state == "model_input":
-        found_model = extract_model_id(user_message, model_database)
-        
-        if not found_model:
-            clean_input = user_message.strip().upper()
-            if not model_database[model_database['model_id'].str.upper() == clean_input].empty:
-                found_model = clean_input
-        
-        elif state == "model_input":
         # CRITICAL: Clear old assessment immediately when entering model_input
         st.session_state.assessment_result = None
         st.session_state.logged_to_gsheet = False
