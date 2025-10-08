@@ -148,15 +148,21 @@ CRITICAL INSTRUCTIONS:
 def get_llama_response(user_message: str, model_database: pd.DataFrame, criteria_database: pd.DataFrame) -> str:
     """Get natural response from Llama"""
     if st.session_state.groq_client is None:
-        return "I need the GROQ_API_KEY to respond. Please configure it in Streamlit secrets."
+        return "I need the GROQ_API_KEY to respond."
     
     try:
         context = build_context(model_database, criteria_database)
         messages = [{"role": "system", "content": context}]
         
-        if st.session_state.current_state != "model_input":
+        # CRITICAL: Only include conversation history in certain states
+        # When selecting model or getting performance value, start FRESH
+        safe_states = ["reason_required", "mitigation_required", "assessment_complete"]
+        
+        if st.session_state.current_state in safe_states:
+            # Include conversation history for these states
             for msg in st.session_state.messages[-6:]:
                 messages.append({"role": msg['role'], "content": msg['content']})
+        # else: NO history for greeting, model_input, performance_input
         
         messages.append({"role": "user", "content": user_message})
         
