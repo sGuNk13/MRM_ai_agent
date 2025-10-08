@@ -212,7 +212,10 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         user_lower = user_message.lower()
         wants_assessment = any(word in user_lower for word in ['assess', 'check', 'evaluate', 'test', 'analyze'])
         
-        if wants_assessment:
+        # ALSO check if user directly typed a model ID (without saying "assess")
+        found_model_direct = extract_model_id(user_message, model_database)
+        
+        if wants_assessment or found_model_direct:
             # CRITICAL: Clear ALL state before starting new assessment
             st.session_state.assessment_result = None
             st.session_state.logged_to_gsheet = False
@@ -220,34 +223,24 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             st.session_state.mitigation_plan = None
             st.session_state.model_id = None
             
-            found_model = extract_model_id(user_message, model_database)
+            found_model = found_model_direct if found_model_direct else extract_model_id(user_message, model_database)
             
             if found_model:
                 model_info = find_model_info(found_model, model_database)
                 
-                # Clear state BEFORE clearing messages
-                st.session_state.assessment_result = None
-                st.session_state.logged_to_gsheet = False
-                st.session_state.degradation_reason = None
-                st.session_state.mitigation_plan = None
-                
                 st.session_state.model_id = found_model
                 st.session_state.current_state = "performance_input"
                 
-                # Keep only the LATEST user message, remove all history before it
+                # Keep only the LATEST user message
                 if len(st.session_state.messages) > 1:
-                    last_msg = st.session_state.messages[-1]  # Keep current "assess model_id_2345"
+                    last_msg = st.session_state.messages[-1]
                     st.session_state.messages = [last_msg]
                 
                 # Return HARDCODED response
                 return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
             else:
                 st.session_state.current_state = "model_input"
-                st.session_state.model_id = None
-                st.session_state.assessment_result = None
-                
-                context_msg = "User wants to assess a model but didn't specify which one. Ask them which model ID they want to assess."
-                return get_llama_response(context_msg, model_database, criteria_database)
+                return "Which model ID would you like to assess?"
         else:
             return get_llama_response(user_message, model_database, criteria_database)
     
