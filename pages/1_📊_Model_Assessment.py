@@ -477,7 +477,6 @@ def main():
                     mime="text/markdown",
                     key=f"download_{idx}"
                 )
-        )
     
     # Chat input
     if prompt := st.chat_input("Type your message..."):
