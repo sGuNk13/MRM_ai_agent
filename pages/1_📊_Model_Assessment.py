@@ -365,14 +365,28 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         return get_llama_response(context_msg, model_database, criteria_database)
     
     elif state == "assessment_complete":
-        if any(word in user_message.lower() for word in ['assess', 'another', 'new model', 'next']):
+        if any(word in user_message.lower() for word in ['assess', 'another', 'more', 'next']):
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
             st.session_state.assessment_result = None
             st.session_state.logged_to_gsheet = False
             st.session_state.degradation_reason = None
             st.session_state.mitigation_plan = None
-            return get_llama_response("User wants to assess another model. Ask which model they'd like to assess next.", model_database, criteria_database)
+            
+            # Extract model ID from the SAME message if present
+            found_model = extract_model_id(user_message, model_database)
+            
+            if found_model:
+                # User said "assess model_id_2345" in one message
+                model_info = find_model_info(found_model, model_database)
+                st.session_state.model_id = found_model
+                st.session_state.current_state = "performance_input"
+                
+                # HARDCODED response
+                return f"You've selected {found_model}, which has a {model_info['metric']} metric and a baseline performance of {model_info['baseline_performance']}.\n\nTo proceed with the assessment, could you please provide the current {model_info['metric']} performance value?"
+            else:
+                # Just asking to assess, no model mentioned yet
+                return "Which model ID would you like to assess?"
         else:
             return get_llama_response(user_message, model_database, criteria_database)
     
