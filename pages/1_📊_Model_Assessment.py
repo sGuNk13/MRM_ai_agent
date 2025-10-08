@@ -55,6 +55,10 @@ def initialize_session_state():
     if 'assessment_result' not in st.session_state:
         st.session_state.assessment_result = None
     
+    # NEW: Store history of all assessments in this session
+    if 'assessment_history' not in st.session_state:
+        st.session_state.assessment_history = []
+    
     if 'degradation_reason' not in st.session_state:
         st.session_state.degradation_reason = None
     
@@ -308,6 +312,10 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 return get_llama_response(context_msg, model_database, criteria_database)
             else:
                 st.session_state.current_state = "assessment_complete"
+                st.session_state.assessment_result = assessment.to_dict()
+                
+                # ADD to history
+                st.session_state.assessment_history.append(assessment.to_dict())
                 
                 if log_assessment_to_gsheet(st.session_state.assessment_result, st.session_state.gsheet_client):
                     st.session_state.logged_to_gsheet = True
@@ -316,7 +324,7 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
                 st.session_state.model_id = None
                 
                 result = st.session_state.assessment_result
-                context_msg = f"Assessment complete! Model {result['model_id']}: Current {result['current']} vs Baseline {result['baseline']}. Deviation: {result['deviation']:.2f}%, Risk: {result['risk_rating']}. Tell user assessment is complete (results shown below). Ask if they want to assess another model."
+                context_msg = f"Assessment complete! ..."
                 return get_llama_response(context_msg, model_database, criteria_database)
                 
         except Exception as e:
@@ -348,14 +356,15 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         refined_mitigation = refine_text_with_llama(user_message, "mitigation", st.session_state.groq_client)
         st.session_state.mitigation_plan = refined_mitigation
         st.session_state.current_state = "assessment_complete"
+        st.session_state.assessment_result = {...}  # wherever you set this
         
-        if log_assessment_to_gsheet_with_details(st.session_state.assessment_result, 
-                                                   st.session_state.degradation_reason,
-                                                   st.session_state.mitigation_plan,
-                                                   st.session_state.gsheet_client):
+        # ADD to history
+        st.session_state.assessment_history.append(st.session_state.assessment_result)
+        
+        if log_assessment_to_gsheet_with_details(...):
             st.session_state.logged_to_gsheet = True
         
-        # AUTO-CLEAR: Reset for next assessment
+        # AUTO-CLEAR
         st.session_state.model_id = None
         st.session_state.degradation_reason = None
         st.session_state.mitigation_plan = None
@@ -435,7 +444,7 @@ def main():
         if st.session_state.model_id:
             st.write(f"**Model:** {st.session_state.model_id}")
     
-    # Chat messages
+    # Display chat messages
     for msg in st.session_state.messages:
         if msg['role'] == 'user':
             with st.chat_message(msg['role'], avatar="👤"):
@@ -444,21 +453,30 @@ def main():
             with st.chat_message(msg['role'], avatar="🐱"):
                 st.markdown(msg['content'])
     
-    # Display assessment
-    if (st.session_state.assessment_result and 
-        st.session_state.current_state == "assessment_complete"):
-        display_assessment_card(st.session_state.assessment_result)
+    # Display ALL assessment results in chronological order
+    if st.session_state.assessment_history:
+        st.markdown("---")
+        st.subheader("📊 Assessment Results")
         
-        if st.session_state.get('logged_to_gsheet'):
-            st.success("✅ Assessment logged to Google Sheets")
-        
-        report = generate_detailed_report(st.session_state.assessment_result)
-        st.markdown(report)
-        st.download_button(
-            "📥 Download Report",
-            report,
-            file_name=f"report_{st.session_state.assessment_result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
-            mime="text/markdown"
+        for idx, result in enumerate(st.session_state.assessment_history):
+            with st.expander(f"Assessment #{idx+1}: {result['model_id']}", expanded=(idx == len(st.session_state.assessment_history) - 1)):
+                display_assessment_card(result)
+                
+                # Show log status only for the latest
+                if idx == len(st.session_state.assessment_history) - 1:
+                    if st.session_state.get('logged_to_gsheet'):
+                        st.success("✅ Assessment logged to Google Sheets")
+                
+                # Generate report
+                report = generate_detailed_report(result)
+                st.markdown(report)
+                st.download_button(
+                    f"📥 Download Report #{idx+1}",
+                    report,
+                    file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+                    mime="text/markdown",
+                    key=f"download_{idx}"
+                )
         )
     
     # Chat input
