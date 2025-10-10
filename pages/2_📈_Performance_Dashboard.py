@@ -176,10 +176,10 @@ def show_single_model_dashboard(df, model_id):
     st.dataframe(recent, use_container_width=True)
     
     # High risk events
-    high_risk_data = model_data.tail(5)[model_data['risk_rating'].isin(['High', 'Critical'])]
+    high_risk_data = model_data[model_data['risk_rating'].isin(['High', 'Critical'])]
     if not high_risk_data.empty and 'degradation_reason' in high_risk_data.columns:
         st.subheader("⚠️ High Risk Events")
-        st.dataframe(high_risk_data[['timestamp', 'deviation', 'degradation_reason', 'mitigation_plan']], 
+        st.dataframe(high_risk_data.tail(5)[['timestamp', 'deviation', 'degradation_reason', 'mitigation_plan']], 
                     use_container_width=True)
 
 def show_metric_group_dashboard(df, selected_metrics):
