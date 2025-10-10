@@ -55,7 +55,7 @@ with st.sidebar:
     # Filters based on dashboard type
     if dashboard_type == "🎯 Single Model":
         st.subheader("Model Selection")
-        available_models = sorted(df['model_id'].astype(str).unique())
+        available_models = sorted(df['model_id'].astype(str).unique(), key=str.lower)
         selected_model = st.selectbox("Choose Model:", available_models)
         
     elif dashboard_type == "👥 Model Group":
@@ -63,7 +63,7 @@ with st.sidebar:
         group_by = st.selectbox("Group By:", ["Metric Type", "Risk Level", "Custom"])
         
         if group_by == "Metric Type":
-            available_metrics = sorted(df['metric'].astype(str).unique())
+            available_metrics = sorted(df['metric'].astype(str).unique(), key=str.lower)
             selected_metric = st.multiselect("Select Metrics:", available_metrics, default=available_metrics[:2] if len(available_metrics) >= 2 else available_metrics)
         elif group_by == "Risk Level":
             risk_levels = st.multiselect("Select Risk Levels:", 
@@ -75,7 +75,7 @@ with st.sidebar:
     elif dashboard_type == "📦 Product Dashboard":
         st.subheader("Product Selection")
         df['product'] = df['model_id'].astype(str).str.split('_').str[0]
-        available_products = sorted(df['product'].unique())
+        available_products = sorted(df['product'].unique(), key=str.lower)
         selected_product = st.selectbox("Choose Product:", available_products)
     
     st.divider()
