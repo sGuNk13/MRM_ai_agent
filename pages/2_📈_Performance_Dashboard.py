@@ -101,14 +101,6 @@ with st.sidebar:
         "Period:",
         ["Last 7 Days", "Last 30 Days", "Last 3 Months", "Last 6 Months", "All Time"]
     )
-
-    if date_filter != "All Time":
-    days_map = {...}
-    days = days_map[date_filter]
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
-    
-    
     
     if date_filter != "All Time":
         days_map = {
