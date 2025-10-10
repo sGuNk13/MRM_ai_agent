@@ -31,10 +31,6 @@ st.caption("Interactive analytics and visualizations")
 # Load data
 try:
     df = load_all_assessments(st.session_state.gsheet_client)
-    
-    ## DEBUG: Show what we loaded
-    #st.write(f"🔍 DEBUG: Total rows loaded from sheets: {len(df)}")
-    st.write(f"🔍 DEBUG: Sample data:")
     st.dataframe(df.head(10))
     
     if df.empty:
@@ -42,13 +38,10 @@ try:
         st.stop()
     
     # Check for model_id before normalization
-    st.write(f"🔍 DEBUG: model_id values BEFORE normalization:")
     st.write(df['model_id'].value_counts())
     
     # NORMALIZE
     df['model_id'] = df['model_id'].str.lower()
-    
-    st.write(f"🔍 DEBUG: model_id values AFTER normalization:")
     st.write(df['model_id'].value_counts())
     
 except Exception as e:
@@ -133,14 +126,7 @@ def show_single_model_dashboard(df, model_id):
     """Single model detailed view"""
     st.header(f"📊 {model_id} Dashboard")
     
-    # DEBUG: Check filtering
-    st.write(f"🔍 DEBUG: Total rows in full df: {len(df)}")
-    st.write(f"🔍 DEBUG: Looking for model_id: {model_id}")
-    
     model_data = df[df['model_id'] == model_id].sort_values('timestamp')
-    
-    st.write(f"🔍 DEBUG: Rows after filtering for {model_id}: {len(model_data)}")
-    st.write(f"🔍 DEBUG: model_data sample:")
     st.dataframe(model_data[['model_id', 'timestamp', 'deviation']])
     
     if model_data.empty:
