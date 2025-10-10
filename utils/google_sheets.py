@@ -43,7 +43,7 @@ def log_assessment_to_gsheet(assessment_dict, gsheet_client) -> bool:
         
         row_data = [
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            assessment_dict['model_id'].lower(),  # <-- Add .lower()
+            assessment_dict['model_id'].lower(),  # Normalize to lowercase
             assessment_dict['metric'],
             assessment_dict['baseline'],
             assessment_dict['current'],
@@ -77,7 +77,7 @@ def log_assessment_to_gsheet_with_details(assessment_dict, reason, mitigation, g
         
         row_data = [
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            assessment_dict['model_id'].lower(),  # <-- Add .lower()
+            assessment_dict['model_id'].lower(),  # Normalize to lowercase
             assessment_dict['metric'],
             assessment_dict['baseline'],
             assessment_dict['current'],
@@ -106,12 +106,10 @@ def load_all_assessments(gsheet_client):
             try:
                 data = worksheet.get_all_records()
                 if data:
-                    print(f"📊 Loaded {len(data)} rows from sheet: {worksheet.title}")  # Debug
                     all_data.extend(data)
             except:
                 continue
         
-        print(f"📊 Total rows collected: {len(all_data)}")  # Debug
         return pd.DataFrame(all_data)
     except Exception as e:
         st.error(f"Error loading assessments: {str(e)}")
