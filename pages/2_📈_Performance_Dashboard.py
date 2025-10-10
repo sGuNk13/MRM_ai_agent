@@ -32,8 +32,8 @@ st.caption("Interactive analytics and visualizations")
 try:
     df = load_all_assessments(st.session_state.gsheet_client)
     
-    # DEBUG: Show what we loaded
-    st.write(f"🔍 DEBUG: Total rows loaded from sheets: {len(df)}")
+    ## DEBUG: Show what we loaded
+    #st.write(f"🔍 DEBUG: Total rows loaded from sheets: {len(df)}")
     st.write(f"🔍 DEBUG: Sample data:")
     st.dataframe(df.head(10))
     
