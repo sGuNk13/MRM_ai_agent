@@ -31,14 +31,25 @@ st.caption("Interactive analytics and visualizations")
 # Load data
 try:
     df = load_all_assessments(st.session_state.gsheet_client)
+    
+    # DEBUG: Show what we loaded
+    st.write(f"🔍 DEBUG: Total rows loaded from sheets: {len(df)}")
+    st.write(f"🔍 DEBUG: Sample data:")
+    st.dataframe(df.head(10))
+    
     if df.empty:
-        st.warning("⚠️ No assessment data available yet. Complete some assessments first!")
-        if st.button("Go to Assessment →"):
-            st.switch_page("pages/1_📊_Model_Assessment.py")
+        st.warning("⚠️ No assessment data available yet.")
         st.stop()
     
-    # NORMALIZE: Convert model_id to lowercase for consistency
+    # Check for model_id before normalization
+    st.write(f"🔍 DEBUG: model_id values BEFORE normalization:")
+    st.write(df['model_id'].value_counts())
+    
+    # NORMALIZE
     df['model_id'] = df['model_id'].str.lower()
+    
+    st.write(f"🔍 DEBUG: model_id values AFTER normalization:")
+    st.write(df['model_id'].value_counts())
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
