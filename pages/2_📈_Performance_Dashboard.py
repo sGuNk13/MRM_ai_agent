@@ -128,7 +128,15 @@ def show_single_model_dashboard(df, model_id):
     """Single model detailed view"""
     st.header(f"📊 {model_id} Dashboard")
     
+    # DEBUG: Check filtering
+    st.write(f"🔍 DEBUG: Total rows in full df: {len(df)}")
+    st.write(f"🔍 DEBUG: Looking for model_id: {model_id}")
+    
     model_data = df[df['model_id'] == model_id].sort_values('timestamp')
+    
+    st.write(f"🔍 DEBUG: Rows after filtering for {model_id}: {len(model_data)}")
+    st.write(f"🔍 DEBUG: model_data sample:")
+    st.dataframe(model_data[['model_id', 'timestamp', 'deviation']])
     
     if model_data.empty:
         st.warning(f"No assessment data for {model_id}")
