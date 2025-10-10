@@ -38,11 +38,11 @@ try:
         st.stop()
     
     # Check for model_id before normalization
-    st.write(df['model_id'].value_counts())
+    #st.write(df['model_id'].value_counts())
     
     # NORMALIZE
-    df['model_id'] = df['model_id'].str.lower()
-    st.write(df['model_id'].value_counts())
+    #df['model_id'] = df['model_id'].str.lower()
+    #st.write(df['model_id'].value_counts())
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
