@@ -101,6 +101,14 @@ with st.sidebar:
         "Period:",
         ["Last 7 Days", "Last 30 Days", "Last 3 Months", "Last 6 Months", "All Time"]
     )
+
+    if date_filter != "All Time":
+    days_map = {...}
+    days = days_map[date_filter]
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    
     
     if date_filter != "All Time":
         days_map = {
@@ -112,8 +120,13 @@ with st.sidebar:
         days = days_map[date_filter]
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
+        total_before = len(df)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df[df['timestamp'] >= start_date]
+        total_after = len(df)
+    
+    # Show what was filtered
+    st.info(f"📅 Showing {total_after} assessments from the last {days} days (filtered {total_before - total_after} older assessments)")
     
     st.divider()
     
