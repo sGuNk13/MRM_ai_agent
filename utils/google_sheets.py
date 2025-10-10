@@ -106,10 +106,12 @@ def load_all_assessments(gsheet_client):
             try:
                 data = worksheet.get_all_records()
                 if data:
+                    print(f"📊 Loaded {len(data)} rows from sheet: {worksheet.title}")  # Debug
                     all_data.extend(data)
             except:
                 continue
         
+        print(f"📊 Total rows collected: {len(all_data)}")  # Debug
         return pd.DataFrame(all_data)
     except Exception as e:
         st.error(f"Error loading assessments: {str(e)}")
