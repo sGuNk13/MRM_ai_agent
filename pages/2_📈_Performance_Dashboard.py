@@ -36,6 +36,10 @@ try:
         if st.button("Go to Assessment →"):
             st.switch_page("pages/1_📊_Model_Assessment.py")
         st.stop()
+    
+    # NORMALIZE: Convert model_id to lowercase for consistency
+    df['model_id'] = df['model_id'].str.lower()
+    
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
     st.stop()
