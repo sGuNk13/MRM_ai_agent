@@ -31,18 +31,18 @@ st.caption("Interactive analytics and visualizations")
 # Load data
 try:
     df = load_all_assessments(st.session_state.gsheet_client)
-    st.dataframe(df.head(10))
+    #st.dataframe(df.head(10))
     
     if df.empty:
         st.warning("⚠️ No assessment data available yet.")
         st.stop()
     
     # Check for model_id before normalization
-    #st.write(df['model_id'].value_counts())
+    st.write(df['model_id'].value_counts())
     
     # NORMALIZE
-    #df['model_id'] = df['model_id'].str.lower()
-    #st.write(df['model_id'].value_counts())
+    df['model_id'] = df['model_id'].str.lower()
+    st.write(df['model_id'].value_counts())
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
