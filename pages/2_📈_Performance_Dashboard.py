@@ -31,18 +31,14 @@ st.caption("Interactive analytics and visualizations")
 # Load data
 try:
     df = load_all_assessments(st.session_state.gsheet_client)
-    #st.dataframe(df.head(10))
-    
     if df.empty:
-        st.warning("⚠️ No assessment data available yet.")
+        st.warning("⚠️ No assessment data available yet. Complete some assessments first!")
+        if st.button("Go to Assessment →"):
+            st.switch_page("pages/1_📊_Model_Assessment.py")
         st.stop()
     
-    # Check for model_id before normalization
-    st.write(df['model_id'].value_counts())
-    
-    # NORMALIZE
+    # NORMALIZE: Convert model_id to lowercase for consistency
     df['model_id'] = df['model_id'].str.lower()
-    st.write(df['model_id'].value_counts())
     
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
@@ -64,7 +60,8 @@ with st.sidebar:
     if dashboard_type == "🎯 Single Model":
         st.subheader("Model Selection")
         available_models = sorted(df['model_id'].astype(str).unique(), key=str.lower)
-        selected_model = st.selectbox("Choose Model:", available_models)
+        selected_model_raw = st.selectbox("Choose Model:", available_models)
+        selected_model = selected_model_raw.lower().strip()
         
     elif dashboard_type == "👥 Model Group":
         st.subheader("Group Selection")
@@ -105,13 +102,14 @@ with st.sidebar:
         days = days_map[date_filter]
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
+        
         total_before = len(df)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df[df['timestamp'] >= start_date]
         total_after = len(df)
-    
-    # Show what was filtered
-    st.info(f"📅 Showing {total_after} assessments from the last {days} days (filtered {total_before - total_after} older assessments)")
+        
+        if total_before > total_after:
+            st.info(f"📅 Showing {total_after} assessments from the last {days} days (filtered {total_before - total_after} older assessments)")
     
     st.divider()
     
@@ -127,7 +125,6 @@ def show_single_model_dashboard(df, model_id):
     st.header(f"📊 {model_id} Dashboard")
     
     model_data = df[df['model_id'] == model_id].sort_values('timestamp')
-    st.dataframe(model_data[['model_id', 'timestamp', 'deviation']])
     
     if model_data.empty:
         st.warning(f"No assessment data for {model_id}")
