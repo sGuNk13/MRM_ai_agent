@@ -145,10 +145,10 @@ The model's performance has **{status}**, with a **{abs_deviation:.2f}% {directi
 
 This assessment compares current performance against the model's historical baseline to detect degradation over time.
 
-### Fold 2: Absolute Performance vs Industry Standard
+### Fold 2: Absolute Performance vs MRM Standard
 **Risk Level:** {fold2_risk}
 
-This assessment evaluates current performance against regulatory/industry standards to ensure minimum acceptable performance thresholds are met.
+This assessment evaluates current performance against MRM standards to ensure minimum acceptable performance thresholds are met.
 
 ### Final Verdict
 **Risk Rating:** {result['risk_rating']}
