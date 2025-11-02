@@ -142,6 +142,25 @@ def calculate_standard_risk_rating(current_performance: float, standard_criteria
     else:
         return "Very Low"
 
+def calculate_standard_risk_rating_inverted(current_performance: float, standard_criteria: Dict) -> str:
+    """Calculate risk rating for ERROR metrics (MAPE/NMAE) where higher is worse"""
+    high_risk = standard_criteria.get('high_risk', 0.2)
+    medium_risk = standard_criteria.get('medium_risk', 0.3)
+    low_risk = standard_criteria.get('low_risk', 0.5)
+    very_low = standard_criteria.get('very_low', 0.6)
+    
+    # Inverted logic: higher values = worse performance
+    if current_performance >= very_low:
+        return "Critical"
+    elif current_performance >= low_risk:
+        return "High"
+    elif current_performance >= medium_risk:
+        return "Medium"
+    elif current_performance >= high_risk:
+        return "Low"
+    else:
+        return "Very Low"
+
 def get_worst_risk_rating(risk1: str, risk2: str) -> str:
     """Compare two risk ratings and return the worst one"""
     risk_hierarchy = {
@@ -180,10 +199,12 @@ def process_model_assessment(model_id: str, current_performance: float,
     if baseline_performance is None or metric is None:
         raise ValueError(f"Incomplete model info for '{model_id}'")
     
-    # Check if metric is MAPE or NMAE (case-insensitive)
+    # Check if metric is MAPE or NMAE (case-insensitive) - ERROR METRICS
     is_mape_nmae = metric.strip().upper() in ['MAPE', 'NMAE']
     
     # Calculate deviation percentage
+    # For error metrics (MAPE/NMAE): positive deviation = worse performance (error increased)
+    # For other metrics: positive deviation = better performance
     deviation_percentage = ((current_performance - baseline_performance) / baseline_performance) * 100
     
     # FOLD 2: Absolute performance vs standard (calculate first for MAPE/NMAE)
@@ -197,11 +218,14 @@ def process_model_assessment(model_id: str, current_performance: float,
         
         if not standard_row.empty:
             standard_criteria = standard_row.iloc[0].to_dict()
-            standard_risk = calculate_standard_risk_rating(current_performance, standard_criteria)
             
-            # For MAPE/NMAE, also calculate baseline standard risk
             if is_mape_nmae:
-                baseline_standard_risk = calculate_standard_risk_rating(baseline_performance, standard_criteria)
+                # Use INVERTED logic for error metrics (higher = worse)
+                standard_risk = calculate_standard_risk_rating_inverted(current_performance, standard_criteria)
+                baseline_standard_risk = calculate_standard_risk_rating_inverted(baseline_performance, standard_criteria)
+            else:
+                # Use normal logic for performance metrics (higher = better)
+                standard_risk = calculate_standard_risk_rating(current_performance, standard_criteria)
     
     # FOLD 1: Deviation from baseline
     if is_mape_nmae:
