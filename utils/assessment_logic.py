@@ -62,9 +62,9 @@ def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
     medium_threshold = criteria.get('medium_threshold', 0.15) * 100
     high_threshold = criteria.get('high_threshold', 0.2) * 100
     
-    # Positive deviation = improvement = No Risk
+    # Positive deviation = improvement = Very Low Risk
     if deviation_percentage > 0:
-        return "No Risk"
+        return "Very Low"
     
     # Negative deviation = degradation (more negative = worse)
     abs_degradation = abs(deviation_percentage)
@@ -94,12 +94,12 @@ def calculate_standard_risk_rating(current_performance: float, standard_criteria
     elif current_performance <= very_low:
         return "Low"
     else:
-        return "No Risk"
+        return "Very Low"
 
 def get_worst_risk_rating(risk1: str, risk2: str) -> str:
     """Compare two risk ratings and return the worst one"""
     risk_hierarchy = {
-        "No Risk": 0,
+        "Very Low": 0,
         "Low": 1,
         "Medium": 2,
         "High": 3,
@@ -148,7 +148,7 @@ def process_model_assessment(model_id: str, current_performance: float,
     deviation_risk = calculate_risk_rating(deviation_percentage, criteria)
     
     # FOLD 2: Absolute performance vs standard
-    standard_risk = "No Risk"  # Default if no standard defined
+    standard_risk = "Very Low"  # Default if no standard defined
     
     if standard_name and not pd.isna(standard_name):
         standard_row = standard_database[
