@@ -36,9 +36,10 @@ def log_assessment_to_gsheet(assessment_dict, gsheet_client) -> bool:
         try:
             worksheet = sheet.worksheet(current_month)
         except gspread.exceptions.WorksheetNotFound:
-            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=10)
+            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=12)
             headers = ['timestamp', 'model_id', 'metric', 'baseline', 
-                      'current_performance', 'deviation', 'risk_rating']
+                      'current_performance', 'deviation', 'deviation_risk', 
+                      'standard_risk', 'final_risk_rating']
             worksheet.append_row(headers)
         
         row_data = [
@@ -48,6 +49,8 @@ def log_assessment_to_gsheet(assessment_dict, gsheet_client) -> bool:
             assessment_dict['baseline'],
             assessment_dict['current'],
             f"{assessment_dict['deviation']:.2f}%",
+            assessment_dict.get('deviation_risk', 'N/A'),
+            assessment_dict.get('standard_risk', 'N/A'),
             assessment_dict['risk_rating']
         ]
         
@@ -69,9 +72,10 @@ def log_assessment_to_gsheet_with_details(assessment_dict, reason, mitigation, g
         try:
             worksheet = sheet.worksheet(current_month)
         except gspread.exceptions.WorksheetNotFound:
-            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=12)
+            worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=14)
             headers = ['timestamp', 'model_id', 'metric', 'baseline', 
-                      'current_performance', 'deviation', 'risk_rating',
+                      'current_performance', 'deviation', 'deviation_risk',
+                      'standard_risk', 'final_risk_rating',
                       'degradation_reason', 'mitigation_plan']
             worksheet.append_row(headers)
         
@@ -82,6 +86,8 @@ def log_assessment_to_gsheet_with_details(assessment_dict, reason, mitigation, g
             assessment_dict['baseline'],
             assessment_dict['current'],
             f"{assessment_dict['deviation']:.2f}%",
+            assessment_dict.get('deviation_risk', 'N/A'),
+            assessment_dict.get('standard_risk', 'N/A'),
             assessment_dict['risk_rating'],
             reason if reason else 'N/A',
             mitigation if mitigation else 'N/A'
@@ -134,8 +140,11 @@ def get_quick_stats(gsheet_client):
     this_month_data = df[df['timestamp'].dt.month == current_month]
     last_month_data = df[df['timestamp'].dt.month == current_month - 1]
     
-    high_risk_this_month = len(this_month_data[this_month_data['risk_rating'].isin(['High', 'Critical'])])
-    high_risk_last_month = len(last_month_data[last_month_data['risk_rating'].isin(['High', 'Critical'])])
+    # Use final_risk_rating if available, otherwise fall back to risk_rating
+    risk_col = 'final_risk_rating' if 'final_risk_rating' in df.columns else 'risk_rating'
+    
+    high_risk_this_month = len(this_month_data[this_month_data[risk_col].isin(['High', 'Critical'])])
+    high_risk_last_month = len(last_month_data[last_month_data[risk_col].isin(['High', 'Critical'])])
     
     if 'deviation' in df.columns:
         df['deviation_numeric'] = pd.to_numeric(df['deviation'].astype(str).str.rstrip('%'), errors='coerce')
