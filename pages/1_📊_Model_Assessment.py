@@ -446,6 +446,22 @@ def main():
             st.write(f"**Model:** {st.session_state.model_id}")
     
     # Display chat messages
+    st.markdown("""
+    <style>
+    /* Force bot messages to left */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
+        flex-direction: row;
+        justify-content: flex-start;
+    }
+    
+    /* Force user messages to right */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     for msg in st.session_state.messages:
         if msg['role'] == 'user':
             with st.chat_message(msg['role'], avatar="👤"):
