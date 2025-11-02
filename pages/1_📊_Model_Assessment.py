@@ -45,7 +45,9 @@ STANDARD_DATABASE_FILE = "mockup_standard.xlsx"
 def initialize_session_state():
     """Initialize all session state variables"""
     if 'messages' not in st.session_state:
-        st.session_state.messages = []
+        st.session_state.messages = [
+            {'role': 'assistant', 'content': 'Hi! I can help you assess model performance. Which model would you like to evaluate?'}
+        ]
     
     if 'current_state' not in st.session_state:
         st.session_state.current_state = "greeting"
@@ -445,30 +447,24 @@ def main():
         if st.session_state.model_id:
             st.write(f"**Model:** {st.session_state.model_id}")
     
-    # Display chat messages
-    st.markdown("""
-    <style>
-    /* Force bot messages to left */
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
-        flex-direction: row;
-        justify-content: flex-start;
-    }
-    
-    /* Force user messages to right */
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-        flex-direction: row-reverse;
-        justify-content: flex-start;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
+    # Display chat messages with custom styling
     for msg in st.session_state.messages:
         if msg['role'] == 'user':
-            with st.chat_message(msg['role'], avatar="👤"):
-                st.markdown(msg['content'])
+            st.markdown(f"""
+            <div style="display: flex; justify-content: flex-end; margin: 10px 0;">
+                <div style="background-color: #E3F2FD; padding: 10px 15px; border-radius: 15px; max-width: 70%; text-align: right;">
+                    <strong>You:</strong><br>{msg['content']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            with st.chat_message(msg['role'], avatar="🐱"):
-                st.markdown(msg['content'])
+            st.markdown(f"""
+            <div style="display: flex; justify-content: flex-start; margin: 10px 0;">
+                <div style="background-color: #F5F5F5; padding: 10px 15px; border-radius: 15px; max-width: 70%;">
+                    <strong>🐱 Assistant:</strong><br>{msg['content']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Display ALL assessment results in chronological order
     if st.session_state.assessment_history:
