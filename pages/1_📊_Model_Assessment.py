@@ -354,6 +354,10 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         st.session_state.mitigation_plan = refined_mitigation
         st.session_state.current_state = "assessment_complete"
         
+        # Update assessment_result with reason and mitigation before logging
+        st.session_state.assessment_result['degradation_reason'] = st.session_state.degradation_reason
+        st.session_state.assessment_result['mitigation_plan'] = st.session_state.mitigation_plan
+        
         # ADD to history
         st.session_state.assessment_history.append(st.session_state.assessment_result)
         
