@@ -351,12 +351,16 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         refined_mitigation = refine_text_with_llama(user_message, "mitigation", st.session_state.groq_client)
         st.session_state.mitigation_plan = refined_mitigation
         st.session_state.current_state = "assessment_complete"
-        st.session_state.assessment_result = {...}  # wherever you set this
         
         # ADD to history
         st.session_state.assessment_history.append(st.session_state.assessment_result)
         
-        if log_assessment_to_gsheet_with_details(...):
+        if log_assessment_to_gsheet_with_details(
+            st.session_state.assessment_result,
+            st.session_state.degradation_reason,
+            st.session_state.mitigation_plan,
+            st.session_state.gsheet_client
+        ):
             st.session_state.logged_to_gsheet = True
         
         # AUTO-CLEAR
