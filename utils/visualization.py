@@ -8,7 +8,7 @@ from datetime import datetime
 def display_assessment_card(assessment_dict):
     """Display assessment result card with two-fold assessment"""
     risk_colors = {
-        "No Risk": "#2ECC71",
+        "Very Low": "#2ECC71",
         "Low": "#27AE60",
         "Medium": "#F39C12",
         "High": "#E67E22",
@@ -97,7 +97,7 @@ def generate_detailed_report(assessment_dict) -> str:
     abs_deviation = abs(result['deviation'])
     
     risk_actions = {
-        "No Risk": "Continue standard monitoring procedures with periodic performance reviews.",
+        "Very Low": "Continue standard monitoring procedures with periodic performance reviews.",
         "Low": "Continue standard monitoring procedures with periodic performance reviews.",
         "Medium": "Implement enhanced monitoring and conduct root cause analysis within the next review cycle.",
         "High": "Immediate investigation required. Initiate model retraining process and validate data quality.",
