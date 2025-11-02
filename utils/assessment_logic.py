@@ -54,9 +54,9 @@ def find_model_info(model_id: str, database: pd.DataFrame) -> Optional[Dict]:
 def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
     """Calculate risk rating based on performance deviation"""
     thresholds = {
-        'low': criteria.get('low_threshold', 5.0),
+        'low': criteria.get('low_threshold', 10.0),
         'medium': criteria.get('medium_threshold', 15.0),
-        'high': criteria.get('high_threshold', 30.0)
+        'high': criteria.get('high_threshold', 20.0)
     }
     
     if deviation_percentage > 0:
