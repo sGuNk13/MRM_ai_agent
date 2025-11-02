@@ -78,6 +78,52 @@ def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
     else:
         return "Critical"
 
+def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_standard_risk: str) -> str:
+    """Calculate deviation risk for MAPE/NMAE using Sheet2 logic"""
+    # Mapping based on the table
+    risk_mapping = {
+        ("Very Low", "Very Low"): "Low",
+        ("Very Low", "Low"): "Low",
+        ("Very Low", "Medium"): "Medium",
+        ("Low", "Very Low"): "Low",  # Improvement
+        ("Low", "Low"): "Low",
+        ("Low", "Medium"): "Medium",
+        ("Low", "High"): "Medium",
+        ("Low", "Critical"): "Medium",
+        ("Very Low", "High"): "High",
+        ("Very Low", "Critical"): "High",
+        ("Medium", "High"): "High",
+        ("Medium", "Critical"): "High",
+        ("Medium", "Medium"): "Medium",
+    }
+    
+    # Get the deviation risk from mapping
+    key = (baseline_standard_risk, current_standard_risk)
+    
+    # If exact match found
+    if key in risk_mapping:
+        return risk_mapping[key]
+    
+    # Handle "either X or Y" cases
+    if baseline_standard_risk == "Low":
+        if current_standard_risk in ["High", "Critical"]:
+            return "High"
+        elif current_standard_risk == "Medium":
+            return "Medium"
+        elif current_standard_risk in ["Low", "Very Low"]:
+            return "Low"
+    
+    if baseline_standard_risk == "Very Low":
+        if current_standard_risk in ["High", "Critical"]:
+            return "High"
+        elif current_standard_risk == "Medium":
+            return "Medium"
+        elif current_standard_risk in ["Low", "Very Low"]:
+            return "Low"
+    
+    # Default fallback
+    return "Medium"
+
 def calculate_standard_risk_rating(current_performance: float, standard_criteria: Dict) -> str:
     """Calculate risk rating based on absolute performance vs standard (Fold 2)"""
     high_risk = standard_criteria.get('high_risk', 0.2)
@@ -134,21 +180,15 @@ def process_model_assessment(model_id: str, current_performance: float,
     if baseline_performance is None or metric is None:
         raise ValueError(f"Incomplete model info for '{model_id}'")
     
-    # FOLD 1: Deviation from baseline
+    # Check if metric is MAPE or NMAE (case-insensitive)
+    is_mape_nmae = metric.strip().upper() in ['MAPE', 'NMAE']
+    
+    # Calculate deviation percentage
     deviation_percentage = ((current_performance - baseline_performance) / baseline_performance) * 100
     
-    criteria_row = criteria_database[
-        criteria_database['metric'].str.strip().str.lower() == metric.strip().lower()
-    ]
-    
-    if criteria_row.empty:
-        raise ValueError(f"Risk criteria not found for metric '{metric}'")
-    
-    criteria = criteria_row.iloc[0].to_dict()
-    deviation_risk = calculate_risk_rating(deviation_percentage, criteria)
-    
-    # FOLD 2: Absolute performance vs standard
+    # FOLD 2: Absolute performance vs standard (calculate first for MAPE/NMAE)
     standard_risk = "Very Low"  # Default if no standard defined
+    baseline_standard_risk = "Very Low"  # For MAPE/NMAE comparison
     
     if standard_name and not pd.isna(standard_name):
         standard_row = standard_database[
@@ -158,6 +198,26 @@ def process_model_assessment(model_id: str, current_performance: float,
         if not standard_row.empty:
             standard_criteria = standard_row.iloc[0].to_dict()
             standard_risk = calculate_standard_risk_rating(current_performance, standard_criteria)
+            
+            # For MAPE/NMAE, also calculate baseline standard risk
+            if is_mape_nmae:
+                baseline_standard_risk = calculate_standard_risk_rating(baseline_performance, standard_criteria)
+    
+    # FOLD 1: Deviation from baseline
+    if is_mape_nmae:
+        # For MAPE/NMAE: Use Sheet2 logic - compare baseline vs current standard risks
+        deviation_risk = calculate_deviation_risk_for_mape_nmae(baseline_standard_risk, standard_risk)
+    else:
+        # For other metrics: Use Sheet1 logic - normal deviation calculation
+        criteria_row = criteria_database[
+            criteria_database['metric'].str.strip().str.lower() == metric.strip().lower()
+        ]
+        
+        if criteria_row.empty:
+            raise ValueError(f"Risk criteria not found for metric '{metric}'")
+        
+        criteria = criteria_row.iloc[0].to_dict()
+        deviation_risk = calculate_risk_rating(deviation_percentage, criteria)
     
     # FINAL VERDICT: Take worst of both
     final_risk = get_worst_risk_rating(deviation_risk, standard_risk)
