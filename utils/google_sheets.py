@@ -71,6 +71,17 @@ def log_assessment_to_gsheet_with_details(assessment_dict, reason, mitigation, g
         
         try:
             worksheet = sheet.worksheet(current_month)
+            # Check if headers exist and update if needed
+            existing_headers = worksheet.row_values(1)
+            expected_headers = ['timestamp', 'model_id', 'metric', 'baseline', 
+                              'current_performance', 'deviation', 'deviation_risk',
+                              'standard_risk', 'final_risk_rating',
+                              'degradation_reason', 'mitigation_plan']
+            
+            # If headers don't match, update them
+            if existing_headers != expected_headers:
+                worksheet.insert_row(expected_headers, 1)
+                
         except gspread.exceptions.WorksheetNotFound:
             worksheet = sheet.add_worksheet(title=current_month, rows=1000, cols=14)
             headers = ['timestamp', 'model_id', 'metric', 'baseline', 
