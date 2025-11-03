@@ -12,14 +12,23 @@ def display_assessment_card(assessment_dict):
         "Low": "#27AE60",
         "Medium": "#F39C12",
         "High": "#E67E22",
-        "Critical": "#C0392B"
+        "Very High": "#C0392B"
     }
     
     final_risk_color = risk_colors.get(assessment_dict['risk_rating'], "#95a5a6")
     deviation_risk_color = risk_colors.get(assessment_dict.get('deviation_risk', 'Low'), "#95a5a6")
     standard_risk_color = risk_colors.get(assessment_dict.get('standard_risk', 'Low'), "#95a5a6")
     
-    trend = "improved" if assessment_dict['deviation'] > 0 else "degraded" if assessment_dict['deviation'] < 0 else "unchanged"
+    # Determine if this is an error metric (MAPE/NMAE)
+    metric = assessment_dict.get('metric', '').strip().upper()
+    is_error_metric = metric in ['MAPE', 'NMAE']
+    
+    # For error metrics: positive deviation = worse, negative = better
+    # For other metrics: positive = better, negative = worse
+    if is_error_metric:
+        trend = "degraded" if assessment_dict['deviation'] > 0 else "improved" if assessment_dict['deviation'] < 0 else "unchanged"
+    else:
+        trend = "improved" if assessment_dict['deviation'] > 0 else "degraded" if assessment_dict['deviation'] < 0 else "unchanged"
     
     st.markdown(f"""
     <div style="background: white; padding: 25px; border-radius: 15px; 
@@ -84,15 +93,32 @@ def generate_detailed_report(assessment_dict) -> str:
     """Generate comprehensive business report"""
     result = assessment_dict
     
-    if result['deviation'] > 0:
-        direction = "increase"
-        status = "improved"
-    elif result['deviation'] < 0:
-        direction = "decrease"
-        status = "degraded"
+    # Determine if this is an error metric
+    metric = result.get('metric', '').strip().upper()
+    is_error_metric = metric in ['MAPE', 'NMAE']
+    
+    # For error metrics: positive deviation = worse, negative = better
+    # For other metrics: positive = better, negative = worse
+    if is_error_metric:
+        if result['deviation'] > 0:
+            direction = "increase"
+            status = "degraded"
+        elif result['deviation'] < 0:
+            direction = "decrease"
+            status = "improved"
+        else:
+            direction = "no change"
+            status = "remained stable"
     else:
-        direction = "no change"
-        status = "remained stable"
+        if result['deviation'] > 0:
+            direction = "increase"
+            status = "improved"
+        elif result['deviation'] < 0:
+            direction = "decrease"
+            status = "degraded"
+        else:
+            direction = "no change"
+            status = "remained stable"
     
     abs_deviation = abs(result['deviation'])
     
@@ -101,7 +127,7 @@ def generate_detailed_report(assessment_dict) -> str:
         "Low": "Continue standard monitoring procedures with periodic performance reviews.",
         "Medium": "Implement enhanced monitoring and conduct root cause analysis within the next review cycle.",
         "High": "Immediate investigation required. Initiate model retraining process and validate data quality.",
-        "Critical": "Emergency response required. Consider model rollback, immediate retraining, and stakeholder notification."
+        "Very High": "Emergency response required. Consider model rollback, immediate retraining, and stakeholder notification."
     }
     
     action = risk_actions[result['risk_rating']]
@@ -109,6 +135,11 @@ def generate_detailed_report(assessment_dict) -> str:
     # Two-fold assessment section
     fold1_risk = result.get('deviation_risk', 'N/A')
     fold2_risk = result.get('standard_risk', 'N/A')
+    
+    # Explain metric type in report
+    metric_type_explanation = ""
+    if is_error_metric:
+        metric_type_explanation = f"\n**Note:** {result['metric']} is an error metric where lower values indicate better performance."
     
     report = f"""
 # Model Performance Assessment Report
@@ -119,7 +150,7 @@ def generate_detailed_report(assessment_dict) -> str:
 
 ## Executive Summary
 
-The model's performance has **{status}**, with a **{abs_deviation:.2f}% {direction}** in {result['metric']}. 
+The model's performance has **{status}**, with a **{abs_deviation:.2f}% {direction}** in {result['metric']}.{metric_type_explanation} 
 
 **Two-Fold Risk Assessment:**
 - **Fold 1 (Deviation from Baseline):** {fold1_risk}
@@ -145,10 +176,10 @@ The model's performance has **{status}**, with a **{abs_deviation:.2f}% {directi
 
 This assessment compares current performance against the model's historical baseline to detect degradation over time.
 
-### Fold 2: Absolute Performance vs MRM Standard
+### Fold 2: Absolute Performance vs Industry Standard
 **Risk Level:** {fold2_risk}
 
-This assessment evaluates current performance against MRM standards to ensure minimum acceptable performance thresholds are met.
+This assessment evaluates current performance against regulatory/industry standards to ensure minimum acceptable performance thresholds are met.
 
 ### Final Verdict
 **Risk Rating:** {result['risk_rating']}
@@ -171,9 +202,9 @@ represents a {abs_deviation:.2f}% change in model effectiveness.
 **Next Steps:**
 - Review model performance metrics
 - Analyze data quality and pipeline health
-- {'Document improvement factors' if result['deviation'] > 0 else 'Investigate root causes'}
+- {'Document improvement factors' if (is_error_metric and result['deviation'] < 0) or (not is_error_metric and result['deviation'] > 0) else 'Investigate root causes'}
 - Brief stakeholders on findings
-- {"Consider model recalibration if standard thresholds are violated" if fold2_risk in ['High', 'Critical'] else "Monitor for trend continuation"}
+- {"Consider model recalibration if standard thresholds are violated" if fold2_risk in ['High', 'Very High'] else "Monitor for trend continuation"}
 
 ---
 
