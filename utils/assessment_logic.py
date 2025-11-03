@@ -312,10 +312,10 @@ Refined:"""
         completion = groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You refine text to be professional and grammatically correct. Keep responses BRIEF - only improve the original, don't expand it."},
+                {"role": "system", "content": "You are a professional editor. Always refine text to be more formal and professional while keeping it concise. Improve grammar, structure, and clarity. Keep the same meaning but make it sound more business-appropriate."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2,
+            temperature=0.1,
             max_tokens=150
         )
         
