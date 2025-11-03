@@ -303,7 +303,7 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             st.session_state.assessment_result = assessment.to_dict()
             risk_rating = st.session_state.assessment_result['risk_rating']
             
-            if risk_rating in ['High', 'Critical']:
+            if risk_rating in ['High', 'Very High']:
                 st.session_state.current_state = "reason_required"
                 context_msg = f"Assessment shows {risk_rating} risk with {assessment.deviation_percentage:.2f}% degradation. Ask user to explain the REASON for this performance degradation. Vague answers are not acceptable."
                 return get_llama_response(context_msg, model_database, criteria_database, standard_database)
