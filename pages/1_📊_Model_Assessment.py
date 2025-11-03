@@ -408,11 +408,6 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         # User wants to revise assessment information
         context_msg = f"User wants to revise: '{user_message}'. Guide them on how to update the information. Explain that they can provide the corrected degradation reason or mitigation plan, and you'll update it."
         return get_llama_response(context_msg, model_database, criteria_database, standard_database)
-            else:
-                # Just asking to assess, no model mentioned yet
-                return "Which model ID would you like to assess?"
-        else:
-            return get_llama_response(user_message, model_database, criteria_database, standard_database)
     
     return get_llama_response(user_message, model_database, criteria_database, standard_database)
 
