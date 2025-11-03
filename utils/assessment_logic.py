@@ -80,49 +80,49 @@ def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
 
 def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_standard_risk: str) -> str:
     """Calculate deviation risk for MAPE/NMAE using Sheet2 logic"""
-    # Mapping based on the table
+    # Complete mapping based on the table
     risk_mapping = {
+        # Baseline: Very Low
         ("Very Low", "Very Low"): "Low",
         ("Very Low", "Low"): "Low",
         ("Very Low", "Medium"): "Medium",
+        ("Very Low", "High"): "High",
+        ("Very Low", "Very High"): "High",
+        
+        # Baseline: Low
         ("Low", "Very Low"): "Low",  # Improvement
         ("Low", "Low"): "Low",
         ("Low", "Medium"): "Medium",
-        ("Low", "High"): "Medium",
-        ("Low", "Very High"): "Medium",
-        ("Very Low", "High"): "High",
-        ("Very Low", "Very High"): "High",
+        ("Low", "High"): "High",
+        ("Low", "Very High"): "High",
+        
+        # Baseline: Medium
+        ("Medium", "Very Low"): "Low",  # Significant improvement
+        ("Medium", "Low"): "Low",       # Improvement
+        ("Medium", "Medium"): "Medium",
         ("Medium", "High"): "High",
         ("Medium", "Very High"): "High",
-        ("Medium", "Medium"): "Medium",
+        
+        # Baseline: High (any current is improvement or stable)
+        ("High", "Very Low"): "Low",
+        ("High", "Low"): "Low",
+        ("High", "Medium"): "Medium",
+        ("High", "High"): "Medium",
+        ("High", "Very High"): "High",
+        
+        # Baseline: Very High (any current is improvement or stable)
+        ("Very High", "Very Low"): "Low",
+        ("Very High", "Low"): "Low",
+        ("Very High", "Medium"): "Medium",
+        ("Very High", "High"): "Medium",
+        ("Very High", "Very High"): "High",
     }
     
     # Get the deviation risk from mapping
     key = (baseline_standard_risk, current_standard_risk)
     
-    # If exact match found
-    if key in risk_mapping:
-        return risk_mapping[key]
-    
-    # Handle "either X or Y" cases
-    if baseline_standard_risk == "Low":
-        if current_standard_risk in ["High", "Very High"]:
-            return "High"
-        elif current_standard_risk == "Medium":
-            return "Medium"
-        elif current_standard_risk in ["Low", "Very Low"]:
-            return "Low"
-    
-    if baseline_standard_risk == "Very Low":
-        if current_standard_risk in ["High", "Very High"]:
-            return "High"
-        elif current_standard_risk == "Medium":
-            return "Medium"
-        elif current_standard_risk in ["Low", "Very Low"]:
-            return "Low"
-    
-    # Default fallback
-    return "Medium"
+    # Return mapped value or default
+    return risk_mapping.get(key, "Medium")
 
 def calculate_standard_risk_rating(current_performance: float, standard_criteria: Dict) -> str:
     """Calculate risk rating based on absolute performance vs standard (Fold 2)"""
