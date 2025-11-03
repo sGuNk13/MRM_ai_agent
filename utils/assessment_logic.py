@@ -76,7 +76,7 @@ def calculate_risk_rating(deviation_percentage: float, criteria: Dict) -> str:
     elif abs_degradation <= high_threshold:
         return "High"
     else:
-        return "Critical"
+        return "Very High"
 
 def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_standard_risk: str) -> str:
     """Calculate deviation risk for MAPE/NMAE using Sheet2 logic"""
@@ -89,11 +89,11 @@ def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_
         ("Low", "Low"): "Low",
         ("Low", "Medium"): "Medium",
         ("Low", "High"): "Medium",
-        ("Low", "Critical"): "Medium",
+        ("Low", "Very High"): "Medium",
         ("Very Low", "High"): "High",
-        ("Very Low", "Critical"): "High",
+        ("Very Low", "Very High"): "High",
         ("Medium", "High"): "High",
-        ("Medium", "Critical"): "High",
+        ("Medium", "Very High"): "High",
         ("Medium", "Medium"): "Medium",
     }
     
@@ -106,7 +106,7 @@ def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_
     
     # Handle "either X or Y" cases
     if baseline_standard_risk == "Low":
-        if current_standard_risk in ["High", "Critical"]:
+        if current_standard_risk in ["High", "Very High"]:
             return "High"
         elif current_standard_risk == "Medium":
             return "Medium"
@@ -114,7 +114,7 @@ def calculate_deviation_risk_for_mape_nmae(baseline_standard_risk: str, current_
             return "Low"
     
     if baseline_standard_risk == "Very Low":
-        if current_standard_risk in ["High", "Critical"]:
+        if current_standard_risk in ["High", "Very High"]:
             return "High"
         elif current_standard_risk == "Medium":
             return "Medium"
@@ -132,7 +132,7 @@ def calculate_standard_risk_rating(current_performance: float, standard_criteria
     very_low = standard_criteria.get('very_low', 0.6)
     
     if current_performance <= high_risk:
-        return "Critical"
+        return "Very High"
     elif current_performance <= medium_risk:
         return "High"
     elif current_performance <= low_risk:
@@ -151,7 +151,7 @@ def calculate_standard_risk_rating_inverted(current_performance: float, standard
     
     # Inverted logic: higher values = worse performance
     if current_performance >= very_low:
-        return "Critical"
+        return "Very High"
     elif current_performance >= low_risk:
         return "High"
     elif current_performance >= medium_risk:
@@ -168,7 +168,7 @@ def get_worst_risk_rating(risk1: str, risk2: str) -> str:
         "Low": 1,
         "Medium": 2,
         "High": 3,
-        "Critical": 4
+        "Very High": 4
     }
     
     level1 = risk_hierarchy.get(risk1, 0)
