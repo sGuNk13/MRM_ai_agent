@@ -404,10 +404,101 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         else:
             return get_llama_response(user_message, model_database, criteria_database, standard_database)
     
-    elif state == "revision_required":
-        # User wants to revise assessment information
-        context_msg = f"User wants to revise: '{user_message}'. Guide them on how to update the information. Explain that they can provide the corrected degradation reason or mitigation plan, and you'll update it."
-        return get_llama_response(context_msg, model_database, criteria_database, standard_database)
+    elif state == "revision_menu":
+        # User selected which field to revise
+        user_choice = user_message.strip()
+        has_reason_mitigation = st.session_state.assessment_result.get('risk_rating') in ['High', 'Very High']
+        
+        if user_choice == "1":
+            # Revise current performance
+            st.session_state.current_state = "revise_performance"
+            return f"Please provide the corrected current performance value for {st.session_state.assessment_result['metric']}:"
+        elif user_choice == "2" and has_reason_mitigation:
+            # Revise degradation reason
+            st.session_state.current_state = "revise_reason"
+            return "Please provide the corrected degradation reason:"
+        elif user_choice == "3" and has_reason_mitigation:
+            # Revise mitigation plan
+            st.session_state.current_state = "revise_mitigation"
+            return "Please provide the corrected mitigation plan:"
+        else:
+            return "Invalid selection. Please type 1, 2, or 3 to select which field to revise."
+    
+    elif state == "revise_performance":
+        # User provided new performance value
+        performance = extract_number(user_message)
+        if performance is None:
+            return "I couldn't find a valid number. Please provide the corrected performance value:"
+        
+        try:
+            # Re-run assessment with new performance
+            model_database = pd.read_excel("mockup_database.xlsx")
+            criteria_database = pd.read_excel("mockup_criteria.xlsx")
+            standard_database = pd.read_excel("mockup_standard.xlsx")
+            
+            assessment = process_model_assessment(
+                st.session_state.assessment_result['model_id'],
+                performance,
+                model_database,
+                criteria_database,
+                standard_database
+            )
+            
+            # Update assessment result
+            st.session_state.assessment_result = assessment.to_dict()
+            st.session_state.assessment_history[-1] = assessment.to_dict()
+            
+            # Re-log to Google Sheets
+            if st.session_state.assessment_result.get('risk_rating') in ['High', 'Very High']:
+                log_assessment_to_gsheet_with_details(
+                    st.session_state.assessment_result,
+                    st.session_state.degradation_reason,
+                    st.session_state.mitigation_plan,
+                    st.session_state.gsheet_client
+                )
+            else:
+                log_assessment_to_gsheet(st.session_state.assessment_result, st.session_state.gsheet_client)
+            
+            st.session_state.current_state = "assessment_complete"
+            return "Assessment updated successfully! Please review the updated results above."
+        except Exception as e:
+            return f"Error updating assessment: {str(e)}"
+    
+    elif state == "revise_reason":
+        # User provided corrected degradation reason
+        refined_reason = refine_text_with_llama(user_message, "reason", st.session_state.groq_client)
+        st.session_state.degradation_reason = refined_reason
+        st.session_state.assessment_result['degradation_reason'] = refined_reason
+        st.session_state.assessment_history[-1]['degradation_reason'] = refined_reason
+        
+        # Re-log to Google Sheets
+        log_assessment_to_gsheet_with_details(
+            st.session_state.assessment_result,
+            st.session_state.degradation_reason,
+            st.session_state.mitigation_plan,
+            st.session_state.gsheet_client
+        )
+        
+        st.session_state.current_state = "assessment_complete"
+        return "Degradation reason updated successfully! Please review the updated results above."
+    
+    elif state == "revise_mitigation":
+        # User provided corrected mitigation plan
+        refined_mitigation = refine_text_with_llama(user_message, "mitigation", st.session_state.groq_client)
+        st.session_state.mitigation_plan = refined_mitigation
+        st.session_state.assessment_result['mitigation_plan'] = refined_mitigation
+        st.session_state.assessment_history[-1]['mitigation_plan'] = refined_mitigation
+        
+        # Re-log to Google Sheets
+        log_assessment_to_gsheet_with_details(
+            st.session_state.assessment_result,
+            st.session_state.degradation_reason,
+            st.session_state.mitigation_plan,
+            st.session_state.gsheet_client
+        )
+        
+        st.session_state.current_state = "assessment_complete"
+        return "Mitigation plan updated successfully! Please review the updated results above."
     
     return get_llama_response(user_message, model_database, criteria_database, standard_database)
 
@@ -501,10 +592,20 @@ def main():
                             st.rerun()
                     with col2:
                         if st.button("✏️ Request Revision", key=f"revise_{idx}", use_container_width=True):
-                            st.session_state.current_state = "revision_required"
+                            st.session_state.current_state = "revision_menu"
+                            
+                            # Build revision menu based on risk level
+                            has_reason_mitigation = result.get('risk_rating') in ['High', 'Very High']
+                            
+                            menu_text = "Please type the number of the part you would like to change:\n\n"
+                            menu_text += "1. Current performance\n"
+                            if has_reason_mitigation:
+                                menu_text += "2. Degradation reason\n"
+                                menu_text += "3. Mitigation plan"
+                            
                             st.session_state.messages.append({
                                 'role': 'assistant', 
-                                'content': 'I see you need to revise some information. Which part would you like to update? (e.g., degradation reason, mitigation plan, or other details)'
+                                'content': menu_text
                             })
                             st.rerun()
                     
