@@ -369,10 +369,8 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         ):
             st.session_state.logged_to_gsheet = True
         
-        # AUTO-CLEAR
+        # AUTO-CLEAR (but keep degradation_reason and mitigation_plan for potential revisions)
         st.session_state.model_id = None
-        st.session_state.degradation_reason = None
-        st.session_state.mitigation_plan = None
         
         result = st.session_state.assessment_result
         context_msg = f"Excellent. Assessment complete. Tell user everything is documented and logged. Ask if they want to assess another model."
