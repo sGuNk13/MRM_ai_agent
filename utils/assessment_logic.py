@@ -297,13 +297,13 @@ def refine_text_with_llama(text: str, field_type: str, groq_client) -> str:
     
     try:
         if field_type == "reason":
-            prompt = f"""Refine this explanation into 1-2 clear, professional sentences. Keep the original meaning, just improve grammar and formality. Do not add extra details.
+            prompt = f"""Refine this text to be more formal and professional. Always improve the grammar and structure to make it business-appropriate. Keep the original meaning.
 
 Original: {text}
 
 Refined:"""
-        else:
-            prompt = f"""Refine this mitigation plan into 2-3 clear, professional sentences. Keep it concise - just improve grammar and formality. Do not expand or add steps that weren't mentioned.
+        else:  # mitigation
+            prompt = f"""Refine this text to be more formal and professional. Always improve the grammar and structure to make it business-appropriate. Keep the original meaning.
 
 Original: {text}
 
