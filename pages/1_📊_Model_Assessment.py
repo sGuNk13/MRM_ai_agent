@@ -404,6 +404,16 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
         else:
             return get_llama_response(user_message, model_database, criteria_database, standard_database)
     
+    elif state == "revision_required":
+        # User wants to revise assessment information
+        context_msg = f"User wants to revise: '{user_message}'. Guide them on how to update the information. Explain that they can provide the corrected degradation reason or mitigation plan, and you'll update it."
+        return get_llama_response(context_msg, model_database, criteria_database, standard_database)
+            else:
+                # Just asking to assess, no model mentioned yet
+                return "Which model ID would you like to assess?"
+        else:
+            return get_llama_response(user_message, model_database, criteria_database, standard_database)
+    
     return get_llama_response(user_message, model_database, criteria_database, standard_database)
 
 # ============================================================================
@@ -483,17 +493,50 @@ def main():
                 if idx == len(st.session_state.assessment_history) - 1:
                     if st.session_state.get('logged_to_gsheet'):
                         st.success("✅ Assessment logged to Google Sheets")
-                
-                # Generate report
-                report = generate_detailed_report(result)
-                st.markdown(report)
-                st.download_button(
-                    f"📥 Download Report #{idx+1}",
-                    report,
-                    file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
-                    mime="text/markdown",
-                    key=f"download_{idx}"
-                )
+                    
+                    # Confirmation section - only for latest assessment
+                    st.markdown("---")
+                    st.markdown("### 🔍 Please Review the Assessment")
+                    st.info("Please review all information above. If everything is correct, click **Confirm** to generate the detailed report. If you need to make changes, click **Request Revision**.")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Confirm - Generate Report", key=f"confirm_{idx}", use_container_width=True):
+                            st.session_state[f'confirmed_{idx}'] = True
+                            st.rerun()
+                    with col2:
+                        if st.button("✏️ Request Revision", key=f"revise_{idx}", use_container_width=True):
+                            st.session_state.current_state = "revision_required"
+                            st.session_state.messages.append({
+                                'role': 'assistant', 
+                                'content': 'I see you need to revise some information. Which part would you like to update? (e.g., degradation reason, mitigation plan, or other details)'
+                            })
+                            st.rerun()
+                    
+                    # Show report only if confirmed
+                    if st.session_state.get(f'confirmed_{idx}', False):
+                        st.markdown("---")
+                        report = generate_detailed_report(result)
+                        st.markdown(report)
+                        st.download_button(
+                            f"📥 Download Report",
+                            report,
+                            file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+                            mime="text/markdown",
+                            key=f"download_{idx}"
+                        )
+                else:
+                    # For older assessments, show report directly
+                    st.markdown("---")
+                    report = generate_detailed_report(result)
+                    st.markdown(report)
+                    st.download_button(
+                        f"📥 Download Report",
+                        report,
+                        file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+                        mime="text/markdown",
+                        key=f"download_{idx}"
+                    )
     
     # Chat input
     if prompt := st.chat_input("Type your message..."):
