@@ -664,6 +664,23 @@ def main():
             for para in paragraphs:
                 if para.strip():
                     st.session_state.messages.append({'role': 'assistant', 'content': para.strip()})
+        elif len(response) > 150:
+            # If single long paragraph, split by sentences
+            sentences = response.replace('? ', '?|').replace('! ', '!|').replace('. ', '.|').split('|')
+            current_chunk = ""
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if not sentence:
+                    continue
+                # If adding this sentence would make chunk too long, save current chunk
+                if current_chunk and len(current_chunk + " " + sentence) > 150:
+                    st.session_state.messages.append({'role': 'assistant', 'content': current_chunk.strip()})
+                    current_chunk = sentence
+                else:
+                    current_chunk = current_chunk + " " + sentence if current_chunk else sentence
+            # Don't forget the last chunk
+            if current_chunk.strip():
+                st.session_state.messages.append({'role': 'assistant', 'content': current_chunk.strip()})
         else:
             st.session_state.messages.append({'role': 'assistant', 'content': response})
         
