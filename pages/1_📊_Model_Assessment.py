@@ -602,61 +602,66 @@ def main():
                     
                     # Confirmation section - only for latest assessment
                     st.markdown("---")
-                    st.markdown("### 🔍 Please Review the Assessment")
-                    st.info("Please review all information above. If everything is correct, click **Confirm** to generate the detailed report. If you need to make changes, click **Request Revision**.")
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if st.button("✅ Confirm - Generate Report", key=f"confirm_{idx}", use_container_width=True):
-                            st.session_state[f'confirmed_{idx}'] = True
-                            st.rerun()
-                    with col2:
-                        if st.button("✏️ Request Revision", key=f"revise_{idx}", use_container_width=True):
-                            st.session_state.current_state = "revision_menu"
-                            
-                            # Build revision menu based on risk level
-                            has_reason_mitigation = result.get('risk_rating') in ['High', 'Very High']
-                            
-                            menu_text = "Please type the number of the part you would like to change:\n\n"
-                            menu_text += "1. Current performance\n"
-                            if has_reason_mitigation:
-                                menu_text += "2. Degradation reason\n"
-                                menu_text += "3. Mitigation plan"
-                            
-                            st.session_state.messages.append({
-                                'role': 'assistant', 
-                                'content': menu_text
-                            })
-                            st.rerun()
-                    with col3:
-                        if st.button("🆕 Start New Assessment", key=f"new_assessment_{idx}", use_container_width=True):
-                            # Reset to greeting state for new assessment
-                            st.session_state.current_state = "greeting"
-                            st.session_state.model_id = None
-                            st.session_state.assessment_result = None
-                            st.session_state.logged_to_gsheet = False
-                            st.session_state.degradation_reason = None
-                            st.session_state.mitigation_plan = None
-                            
-                            st.session_state.messages.append({
-                                'role': 'assistant',
-                                'content': 'Which model ID would you like to assess?'
-                            })
-                            st.rerun()
+                    # Show confirmation/revision buttons only if not yet confirmed
+                    if not st.session_state.get(f'confirmed_{idx}', False):
+                        st.markdown("### 🔍 Please Review the Assessment")
+                        st.info("Please review all information above. If everything is correct, click **Confirm** to generate the detailed report. If you need to make changes, click **Request Revision**.")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("✅ Confirm - Generate Report", key=f"confirm_{idx}", use_container_width=True):
+                                st.session_state[f'confirmed_{idx}'] = True
+                                st.rerun()
+                        with col2:
+                            if st.button("✏️ Request Revision", key=f"revise_{idx}", use_container_width=True):
+                                st.session_state.current_state = "revision_menu"
+                                
+                                # Build revision menu based on risk level
+                                has_reason_mitigation = result.get('risk_rating') in ['High', 'Very High']
+                                
+                                menu_text = "Please type the number of the part you would like to change:\n\n"
+                                menu_text += "1. Current performance\n"
+                                if has_reason_mitigation:
+                                    menu_text += "2. Degradation reason\n"
+                                    menu_text += "3. Mitigation plan"
+                                
+                                st.session_state.messages.append({
+                                    'role': 'assistant', 
+                                    'content': menu_text
+                                })
+                                st.rerun()
                     
-                    # Show download button only if confirmed
+                    # Show download and new assessment buttons only after confirmation
                     if st.session_state.get(f'confirmed_{idx}', False):
-                        st.markdown("---")
                         st.success("✅ Report generated! You can download it from the sidebar or below.")
                         report = generate_detailed_report(result)
-                        st.download_button(
-                            f"📥 Download Report",
-                            report,
-                            file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
-                            mime="text/markdown",
-                            key=f"download_{idx}",
-                            use_container_width=True
-                        )
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.download_button(
+                                f"📥 Download Report",
+                                report,
+                                file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+                                mime="text/markdown",
+                                key=f"download_{idx}",
+                                use_container_width=True
+                            )
+                        with col2:
+                            if st.button("🆕 Start New Assessment", key=f"new_assessment_{idx}", use_container_width=True):
+                                # Reset to greeting state for new assessment
+                                st.session_state.current_state = "greeting"
+                                st.session_state.model_id = None
+                                st.session_state.assessment_result = None
+                                st.session_state.logged_to_gsheet = False
+                                st.session_state.degradation_reason = None
+                                st.session_state.mitigation_plan = None
+                                
+                                st.session_state.messages.append({
+                                    'role': 'assistant',
+                                    'content': 'Which model ID would you like to assess?'
+                                })
+                                st.rerun()
                 else:
                     # For older assessments, show download button directly
                     st.markdown("---")
