@@ -584,7 +584,10 @@ def main():
             """, unsafe_allow_html=True)
     
     # Display ALL assessment results in chronological order
-    if st.session_state.assessment_history:
+    # Only show if we're in assessment_complete state (not during new assessment)
+    show_results = st.session_state.current_state in ['assessment_complete', 'revision_menu', 'revise_performance', 'revise_reason', 'revise_mitigation']
+    
+    if st.session_state.assessment_history and show_results:
         st.markdown("---")
         st.subheader("📊 Assessment Results")
         
