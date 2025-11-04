@@ -144,19 +144,26 @@ def calculate_standard_risk_rating(current_performance: float, standard_criteria
 
 def calculate_standard_risk_rating_inverted(current_performance: float, standard_criteria: Dict) -> str:
     """Calculate risk rating for ERROR metrics (MAPE/NMAE) where higher is worse"""
-    high_risk = standard_criteria.get('high_risk', 0.2)
-    medium_risk = standard_criteria.get('medium_risk', 0.3)
-    low_risk = standard_criteria.get('low_risk', 0.5)
-    very_low = standard_criteria.get('very_low', 0.6)
+    # Thresholds are boundaries between risk levels
+    # very_low is the upper bound for Very Low
+    # low_risk is the upper bound for Low
+    # medium_risk is the upper bound for Medium
+    # high_risk is the upper bound for High
+    # Anything >= high_risk is Very High
+    
+    very_low_threshold = standard_criteria.get('very_low', 0.05)
+    low_threshold = standard_criteria.get('low_risk', 0.1)
+    medium_threshold = standard_criteria.get('medium_risk', 0.15)
+    high_threshold = standard_criteria.get('high_risk', 0.2)
     
     # Inverted logic: higher values = worse performance
-    if current_performance >= very_low:
+    if current_performance >= high_threshold:
         return "Very High"
-    elif current_performance >= low_risk:
+    elif current_performance >= medium_threshold:
         return "High"
-    elif current_performance >= medium_risk:
+    elif current_performance >= low_threshold:
         return "Medium"
-    elif current_performance >= high_risk:
+    elif current_performance >= very_low_threshold:
         return "Low"
     else:
         return "Very Low"
@@ -229,8 +236,15 @@ def process_model_assessment(model_id: str, current_performance: float,
     
     # FOLD 1: Deviation from baseline
     if is_mape_nmae:
-        # For MAPE/NMAE: Use Sheet2 logic - compare baseline vs current standard risks
-        deviation_risk = calculate_deviation_risk_for_mape_nmae(baseline_standard_risk, standard_risk)
+        # For MAPE/NMAE error metrics:
+        # Positive deviation = error increased (worse) → use Sheet2 mapping
+        # Negative deviation = error decreased (better) → Very Low risk
+        if deviation_percentage < 0:
+            # Performance improved (error decreased) → Very Low risk
+            deviation_risk = "Very Low"
+        else:
+            # Performance degraded (error increased) → use Sheet2 logic
+            deviation_risk = calculate_deviation_risk_for_mape_nmae(baseline_standard_risk, standard_risk)
     else:
         # For other metrics: Use Sheet1 logic - normal deviation calculation
         criteria_row = criteria_database[
