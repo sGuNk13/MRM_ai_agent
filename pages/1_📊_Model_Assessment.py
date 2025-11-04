@@ -528,18 +528,37 @@ def main():
         st.success(f"📐 {len(standard_database)} standards loaded")
         
         if st.button("🔄 Reset Conversation", use_container_width=True):
-            st.session_state.messages = []
+            st.session_state.messages = [
+                {'role': 'assistant', 'content': 'Hi! I can help you assess model performance. Which model would you like to evaluate?'}
+            ]
             st.session_state.current_state = "greeting"
             st.session_state.model_id = None
             st.session_state.assessment_result = None
             st.session_state.degradation_reason = None
             st.session_state.mitigation_plan = None
+            # Keep assessment_history so reports are still available
             st.rerun()
         
         if st.button("🏠 Back to Home", use_container_width=True):
             st.switch_page("streamlit_app.py")
         
         st.divider()
+        
+        # Show download links for all past assessments
+        if st.session_state.assessment_history:
+            st.subheader("📥 Download Reports")
+            for idx, result in enumerate(st.session_state.assessment_history):
+                report = generate_detailed_report(result)
+                st.download_button(
+                    f"Report: {result['model_id']}",
+                    report,
+                    file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
+                    mime="text/markdown",
+                    key=f"sidebar_download_{idx}",
+                    use_container_width=True
+                )
+            st.divider()
+        
         st.subheader("Current Status")
         st.write(f"**State:** {st.session_state.current_state}")
         if st.session_state.model_id:
@@ -607,36 +626,47 @@ def main():
                             })
                             st.rerun()
                     
-                    # Show report only if confirmed
+                    # Show download button only if confirmed
                     if st.session_state.get(f'confirmed_{idx}', False):
                         st.markdown("---")
+                        st.success("✅ Report generated! You can download it from the sidebar or below.")
                         report = generate_detailed_report(result)
-                        st.markdown(report)
                         st.download_button(
                             f"📥 Download Report",
                             report,
                             file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
                             mime="text/markdown",
-                            key=f"download_{idx}"
+                            key=f"download_{idx}",
+                            use_container_width=True
                         )
                 else:
-                    # For older assessments, show report directly
+                    # For older assessments, show download button directly
                     st.markdown("---")
                     report = generate_detailed_report(result)
-                    st.markdown(report)
                     st.download_button(
                         f"📥 Download Report",
                         report,
                         file_name=f"report_{result['model_id']}_{datetime.now().strftime('%Y%m%d')}.md",
                         mime="text/markdown",
-                        key=f"download_{idx}"
+                        key=f"download_{idx}",
+                        use_container_width=True
                     )
     
     # Chat input
     if prompt := st.chat_input("Type your message..."):
         st.session_state.messages.append({'role': 'user', 'content': prompt})
         response = process_user_input(prompt, model_database, criteria_database, standard_database)
-        st.session_state.messages.append({'role': 'assistant', 'content': response})
+        
+        # Split long responses into multiple messages
+        if '\n\n' in response:
+            # Split by double newline (paragraph breaks)
+            paragraphs = response.split('\n\n')
+            for para in paragraphs:
+                if para.strip():
+                    st.session_state.messages.append({'role': 'assistant', 'content': para.strip()})
+        else:
+            st.session_state.messages.append({'role': 'assistant', 'content': response})
+        
         st.rerun()
 
 if __name__ == "__main__":
