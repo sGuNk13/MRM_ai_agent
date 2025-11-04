@@ -88,6 +88,28 @@ def display_assessment_card(assessment_dict):
         </table>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Show degradation reason and mitigation plan if available
+    degradation_reason = assessment_dict.get('degradation_reason', '')
+    mitigation_plan = assessment_dict.get('mitigation_plan', '')
+    
+    if degradation_reason or mitigation_plan:
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 10px 0;">
+            <h4 style="margin-top: 0; color: #495057;">📝 Additional Details</h4>
+        """, unsafe_allow_html=True)
+        
+        if degradation_reason:
+            st.markdown(f"""
+            <p style="margin: 10px 0;"><strong>Degradation Reason:</strong><br>{degradation_reason}</p>
+            """, unsafe_allow_html=True)
+        
+        if mitigation_plan:
+            st.markdown(f"""
+            <p style="margin: 10px 0;"><strong>Mitigation Plan:</strong><br>{mitigation_plan}</p>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
 def generate_detailed_report(assessment_dict) -> str:
     """Generate comprehensive business report"""
