@@ -303,9 +303,20 @@ def process_user_input(user_message: str, model_database: pd.DataFrame, criteria
             st.session_state.assessment_result = assessment.to_dict()
             risk_rating = st.session_state.assessment_result['risk_rating']
             
+            # Check if error metric (MAPE/NMAE)
+            metric = assessment.metric.strip().upper()
+            is_error_metric = metric in ['MAPE', 'NMAE']
+            
+            # For error metrics: negative deviation = worse (error increased)
+            # For other metrics: negative deviation = worse (performance decreased)
+            if is_error_metric:
+                performance_change = "increase" if assessment.deviation_percentage > 0 else "decrease" if assessment.deviation_percentage < 0 else "no change"
+            else:
+                performance_change = "degradation" if assessment.deviation_percentage < 0 else "improvement" if assessment.deviation_percentage > 0 else "no change"
+            
             if risk_rating in ['High', 'Very High']:
                 st.session_state.current_state = "reason_required"
-                context_msg = f"Assessment shows {risk_rating} risk with {assessment.deviation_percentage:.2f}% degradation. Ask user to explain the REASON for this performance degradation. Vague answers are not acceptable."
+                context_msg = f"Assessment shows {risk_rating} risk with {abs(assessment.deviation_percentage):.2f}% {performance_change}. Ask user to explain the REASON for this performance issue. Vague answers are not acceptable."
                 return get_llama_response(context_msg, model_database, criteria_database, standard_database)
             else:
                 st.session_state.current_state = "assessment_complete"
