@@ -605,7 +605,7 @@ def main():
                     st.markdown("### 🔍 Please Review the Assessment")
                     st.info("Please review all information above. If everything is correct, click **Confirm** to generate the detailed report. If you need to make changes, click **Request Revision**.")
                     
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
                     with col1:
                         if st.button("✅ Confirm - Generate Report", key=f"confirm_{idx}", use_container_width=True):
                             st.session_state[f'confirmed_{idx}'] = True
@@ -626,6 +626,21 @@ def main():
                             st.session_state.messages.append({
                                 'role': 'assistant', 
                                 'content': menu_text
+                            })
+                            st.rerun()
+                    with col3:
+                        if st.button("🆕 Start New Assessment", key=f"new_assessment_{idx}", use_container_width=True):
+                            # Reset to greeting state for new assessment
+                            st.session_state.current_state = "greeting"
+                            st.session_state.model_id = None
+                            st.session_state.assessment_result = None
+                            st.session_state.logged_to_gsheet = False
+                            st.session_state.degradation_reason = None
+                            st.session_state.mitigation_plan = None
+                            
+                            st.session_state.messages.append({
+                                'role': 'assistant',
+                                'content': 'Which model ID would you like to assess?'
                             })
                             st.rerun()
                     
